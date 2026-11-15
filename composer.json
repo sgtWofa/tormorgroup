@@ -1,0 +1,20 @@
+{
+    "name": "tech/tormorgroup",
+    "description": "For managing activities of tormorgroup",
+    "type": "project",
+    "license": "proprietary",
+    "autoload": {
+        "psr-4": {
+            "MyApp\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "WofaSam",
+            "email": "samabraham446@gmail.com"
+        }
+    ],
+    "require": {
+        "cboden/ratchet": "^0.4.4"
+    }
+}

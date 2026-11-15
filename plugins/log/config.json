@@ -1,0 +1,18 @@
+{
+	"name":"Logs",
+	"version":"1.0.0",
+	"id":"logs",
+	"author":"Eathorne",
+	"author website":"",
+	"thumbnail":"thumbnail.jpg",
+	"active":true,
+	"index":6,
+	"routes": {
+		"on":["all"],
+		"off":[]
+	},
+	"dependencies": {
+		"basic-admin":"1.0.0"
+	}
+
+}

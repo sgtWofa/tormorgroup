@@ -1,0 +1,12 @@
+{
+  "id": "maintenance-mode",
+  "name": "Maintenance Mode",
+  "description": "Allows admin to enable maintenance mode and allow selected users to bypass it.",
+  "version": "1.0.0",
+  "active": true,
+  "index": 1,
+  "routes": {
+    "on": ["all"],
+    "off": []
+  }
+}

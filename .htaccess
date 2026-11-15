@@ -1,0 +1,12 @@
+Options -MultiViews
+
+RewriteEngine On
+RewriteBase /
+
+# Allow existing files and directories to load normally.
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Forward all other application routes to the PHP front controller.
+RewriteRule ^(.+?)/?$ index.php?url=$1 [QSA,L]

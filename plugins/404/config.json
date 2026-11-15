@@ -1,0 +1,17 @@
+{
+	"name":"Error pages",
+	"id":"404",
+	"version":"1.0.0",
+	"author":"Tormor Group",
+	"thumbnail":"thumbnail.jpg",
+	"active":true,
+	"index":1,
+	"routes": {
+		"on":["404"],
+		"off":[]
+	},
+	"dependencies": {
+
+	}
+
+}

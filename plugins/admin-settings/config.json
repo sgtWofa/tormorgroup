@@ -1,0 +1,19 @@
+{
+	"name":"Settings",
+	"version":"1.0.0",
+	"id":"settings",
+	"description":"Performs basic admin operations",
+	"author":"WofaSam",
+	"author website":"",
+	"thumbnail":"thumbnail.jpg",
+	"active":true,
+	"index":5,
+	"routes": {
+		"on":["all"],
+		"off":["login","signup","home","logout"]
+	},
+	"dependencies": {
+
+	}
+
+}

@@ -1,0 +1,244 @@
+please create another feature in the backoffice called agent services. it will be a separate tab just like that of to and from bank tab 
+    If Customer type external and Service type is Cash4Ecash - user places order & higher role approves first. Cash drawer  updates cash & e-cash of user after transaction.
+    - dynamically display the following inputs:
+        Agent name :
+        Contact number:
+        Business name:
+        Services Provider: select options ( Mtn, Telecel, AT, Gmoney, Ghanapay, Fidelity, Ecobank, Access Bank, GCB, GtBank, Nafana Rural Bank, Suma Rural Bank, Stanbic Bank, FBN, FNB)
+        Amount/load:
+        Assign to admin or operations manager
+        submit.
+   
+    when it is submitted, the assigned user can see it in when they open the agent services tab. where they can: edit, confirm or reject.
+    - Operations Or admin (assigned) continues with the next phase when they click edit. they now select
+        - Type of Customer: (select options are: Other Agent, Bulk Sending)
+        -  If other agent is selected, hide input for commission
+        -  If Bulk Sending is selected: Display input for user to enter commission amount
+        - Assigned admin or Operations then confirm or rejects.
+    - if they reject, the process ends.
+    - If confirmed
+        the user who created the transaction would proceed with the next phase.
+        - the commission amount would be displayed, then another select field for Commission type : + fee or - fee
+        - if they select + fee, the commission is added to the amount/load as amount payable. the amount of ecash sent based on network selected will be equal to the amount/load and the commission amount is saved in commissions. if they select - fee, the commission amount is deducted from the amount or load the balance would be sent to the customer based on selected service provider and the ecash channel is deducted by the balance but the cash of the cashdrawer is increased by the amount. the commission amount is saved in commissions. check how it is handled in momoremit and implement it. 
+        - Agent will Count amount received : and the currency calculator modal is triggered when they click in amount Calculator input. check how currency calculator modal is implemented in momoremit. implement the change system also refer to how it is implemented in the momoremit. 
+        - If ecash isnt enough : request ( auto initiated to who? )
+        - If ecash is enough: continue 
+        - Agent number (or account number or till or Shortcode) input:
+        - Picture upload
+        - Balance
+        - Save. this ends the flow with status updated to completed
+
+    If external & Ecash4cash - 
+    - Initial stage : user places order & higher role approves first. (operations account increase & agent cash drawer decreases)
+    - Order form 
+        Agent name : 
+        Contact number: 
+        Business name:
+        Services Provider: ( Mtn, Telecel, AT, Gmoney, Ghanapay, Fidelity, Ecobank, Access Bank, GCB, GtBank, Nafana Rural Bank, Suma Rural Bank, Stanbic Bank, FBN, FNB)
+        Amount/load: 
+        submit to assigned. 
+        
+    - 2nd stage
+        the assigned user can see it in when they open the agent services tab. where they can: edit, confirm or reject.
+        - assigned user upload picture and confirm or reject transaction
+    - Last stage 
+        - The user who created the transaction now enters the amount paid (this will trigger the currency calculator and the change stystem) :
+        - and save. this ends the flow with status updated to completed
+
+    if External Ecash 4 ecash 
+    Case one where admin or operations manager creates the transaction
+        - dynamically display the following inputs
+            - Picture upload : 
+            - receiving network: Telecel, mtn, at
+            - Load (amount received): (amount)
+            - paying Phone number 
+
+        - To Customer 
+            - network to transfer : mtn, at, TELECEL 
+            - Receiving phone number:
+            - Load (amount to send): autofill amount received
+            - Save and status is set to completed. the ecash channel of the agent increases by amount received (for receiving network) and paying network is decreased in the cashdrawer of the user who created the transaction
+    
+    Case two: where it is Initiated by Agent
+    - dynamically display the following inputs
+        - Agent name : 
+        - Contact number: 
+        - Business name: 
+        - receiving network: ( Mtn, Telecel, AT, Gmoney, Ghanapay, Fidelity, Ecobank, Access Bank, GCB, GtBank, Nafana Rural Bank, Suma Rural Bank, Stanbic Bank, FBN, FNB)
+        - Amount/load: 
+        - Paying network : ( Mtn, Telecel, AT, Gmoney, Ghanapay, Fidelity, Ecobank, Access Bank, GCB, GtBank, Nafana Rural Bank, Suma Rural Bank, Stanbic Bank, FBN, FNB )
+
+    - list users who are admin or operations manager to be assigned when selected as assigned. 
+    - submit to assigned
+
+    - If the assigned user rejects, the process ends but if its confirmed: 2nd stage is activated 
+        - assigned user uploads picture proof: 
+        - Submit to agent who created the transaction
+    - 3rd stage 
+        - Agent complets the process by
+        - pay to phone number: 
+        - Load: autofill
+        - Save and status is set to completed. the ecash channel of the agent increases by amount received (for receiving network) and paying network is decreased in the cashdrawer of the user who created the transaction 
+
+    If internal & cash 4 e-cash
+    - initial stage - 1st person (who creates the transaction's cash decreases and ecash increases in their cashdrawer ]
+        dynamically display the following inputs:
+        - Ecash needed: Mtn, at, TELECEL, Gmoney and ghanapay 
+        - Load/amount : 
+        - Assign : ( only users with with enough ecash will appear & can't take from users assigned different branch or location)
+        - cash received (this triggers the currency calculator and change system) :
+        - submit to 2nd person:
+    - 2nd stage - 2nd person [cash increase and ecash decreases in their cashdrawer]
+        - 1. Cross check the denos (require agent to enter currency denos received from 1st person against what was paid)
+        - 2. Agents in need of ecash's details appear for ecash (assigned sim details for selected network appears for the user who created the transaction)
+        - 3. Submit for approval. 
+    - Last stage - 1st person
+        - 1. Uploads picture & proceed. 
+        - Note:
+            - 2nd person must have enough ecash in their cashdrawer
+            - 1st person must have enough cash  in their cashdrawer
+
+    
+    If Customer type: Internal and Service type: ecash 4 ecash 
+    - Initial stage - 1st person  ( who creates the transaction's ecash decreases from the network they sent and ecash increases for the one they received in the cashdrawer)
+        dynamically display the following inputs:
+        - Ecash needed: Mtn, TELECEL, at, ghanapay and Gmoney 
+        - Load/amount: 
+        - Assign to  : ( only agents with enough ecash will appear, can't take from different location too, display the balance of the agents against their names in the list (for the selected network)) 
+        - Ecash sent: Telecel , at, mtn, Gmoney, ghanapay
+        - submit to 2nd person :
+    - 2nd stage -  2nd person ( ecash received increases and ecash paid decreases in the cashdrawer)
+        - Confirm ecash received 
+        - Upload picture proof of ecash received :
+        - Agent in needs details appear (assigned sim details for selected network appears for the user who created the transaction)
+        - Send ecash
+    - Last stage -  1st person
+        - Uploads picture proof of ecash received
+        - complete transaction
+    
+
+    If Customer type: Internal Service type: ecash 4 cash 
+    - initial stage - 1st person (ecash decrease cash increases in their cashdrawer)
+        dynamically display the following inputs
+        - Cash needed : 
+        - Assign to: ( only agents with enough will appear, can't take from different location too) 
+        - Ecash sent: Telecel, mtn, at 
+        - submit to 2nd person :
+    - 2nd stage - 2nd person ( ecash increases and cash decreases in their cashdrawer )
+        - Confirm ecash received 
+        - Upload picture proof: 
+        - Enter cash paid (this triggers currency calculator) :  ensure amount paid equal to ecash sent by first person 
+        - submit for approval 
+    - Last stage - 1st person 
+        - enters denominations received (it should check it balances with cash denominations 2nd person entered) 
+        - Save and complete.
+    
+## Agent Services Workflow — Step by Step
+
+### 1. Request creation
+- User opens add.php
+- They choose:
+  - `customer_type`: `External` or `Internal`
+  - `service_type`: `Cash to E-Cash`, `E-Cash to Cash`, or `E-Cash to E-Cash`
+- The form shows fields dynamically based on that selection:
+  - `External Cash to E-Cash` → provider, amount, agent details, assign-to
+  - `External E-Cash to E-Cash` → admin-only fields or customer details
+  - `Internal Cash to E-Cash` → internal e-cash needed, cash needed, assignment
+  - `Internal E-Cash to Cash` → internal e-cash sent, cash needed, assignment
+- Cash denomination details can be captured via the denominations modal.
+- The controller builds a `metadata` payload and saves the row with:
+  - `status = Pending`
+  - `creator_id`
+  - `assigned_to`
+  - `metadata` JSON
+  - optional `denominations` (if cash is involved, denomination is required)
+
+### stage 2. Confirm/Approve or reject request details
+- In edit.php, the edit page is used for confirmation or completion.
+- The assigned user reviews or updates:
+  - denominations verification where cash is involved
+  - photo upload where e-cash is coming in 
+  - cash amounts
+  - metadata fields
+  - here is where 2nd stage is carried: upload picture proof if ecash is coming in. enter cash received denominations if cash is coming in. if its internal, display the assigned sim details of user who is in need of ecash based on selected service. for example, if selected service is mtn, display assigned sim details of mtn for the user (check how assigned sims details are captured in requests at the backoffice)
+  - remarks
+  - Approve sets status `Approved` and stores `approver_id`.
+  - Reject sets status `Rejected`.
+  - These actions are gated by:
+  - `agent_services_can_approve()`
+  - `agent_services_can_reject()`
+- On submit with `action_type=confirm`, the controller updates:
+  - `status = Confirmed`
+  - `processor_id = current user`
+  - `metadata` and `denominations`
+- This is the explicit “confirmed by processor” stage.
+
+### stage 3. Complete the transaction
+- When status is `Confirmed` or `Processing`, the action center shows `Complete`.
+- `agent_services_can_complete()` allows completion by:
+  - creator
+  - assigned user
+  - processor
+  - admin/manager
+- The completion flow lives in agent-services-controller.php and calls:
+  - `agent_services_apply_atomic_updates($id)`
+- This helper applies the actual cash / e-cash movements using `BackOfficeCashdrawer` functions.
+
+###. Settlement behavior by service type (cashdrawer syncing and update)
+The helper routes the settlement based on `service_type`:
+
+For internal transaction
+- `Cash to E-Cash`
+  - cash movement `out`
+  - e-cash movement `in`
+
+- `E-Cash to Cash`
+  - e-cash movement `out`
+  - cash movement `in`
+
+- `E-Cash to E-Cash`
+  - e-cash movement `out` from one channel
+  - e-cash movement `in` to another channel
+
+  For external transaction
+- `Cash to E-Cash`
+  - cash movement `in`
+  - e-cash movement `out`
+
+- `E-Cash to Cash`
+  - e-cash movement `in`
+  - cash movement `out`
+
+- `E-Cash to E-Cash`
+  - e-cash movement `in` from one channel
+  - e-cash movement `out` to another channel
+
+The helper chooses channels from:
+- `provider`
+- `paying_network`
+- `receiving_network`
+- metadata fields like `ecash_needed`, `ecash_sent`, `transfer_network`
+
+###. Final status update
+- If atomic updates succeed:
+  - status set to `Completed`
+  - `date_completed` is recorded
+- If settlement fails:
+  - status set to `Failed`
+  - failure reason is written to status history
+
+###. Action center behavior
+The view.php action center now shows the next correct step:
+- `Confirm` / `Approve` / `Reject` when pending. 
+- `Edit & Confirm` if the assigned user is allowed to confirm first
+- `Complete` when confirmed/processing
+
+###. Metadata tracking
+Important data stored in `metadata`:
+- `customer_type`
+- `service_type`
+- `agent_name`, `agent_number`, `business_name`
+- `provider`, `paying_network`, `receiving_network`, `transfer_network`
+- `cash_received_amount`, `change_required`
+- `change_denominations`
+- `ecash_needed`, `ecash_sent`

@@ -1,0 +1,17 @@
+{
+	"name":"Cash Pickup",
+	"version":"1.0.0",
+	"id":"cashpickup",
+	"author":"WofaSam",
+	"author website":"",
+	"thumbnail":"thumbnail.jpg",
+	"active":true,
+	"index":3,
+	"routes": {
+		"on":["admin"],
+		"off":[]
+	},
+	"dependencies": {
+		"basic-admin":"1.0.0"
+	}
+}

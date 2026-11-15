@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<link rel="stylesheet" type="text/css" href="<?=ROOT?>/assets/css/bootstrap.min.css">
+
+	<!-- Favicons -->
+	<link href="<?=APP_LOGO2?>" rel="icon">
+	
+  	<link href="<?=ROOT?>/assets/css/all.min.css" rel="stylesheet">
+  	<link href="<?= ROOT ?>/assets/css/custom.css" rel="stylesheet" />
+	    <!-- Feather icons (optional) -->
+	  <script src="<?=ROOT?>/assets/js/bootstrap.bundle.min.js"></script>
+	  <script src="<?=ROOT?>/assets/js/feather.min.js"></script>
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title><?=ucfirst(page())?> | <?=APP_NAME?></title>
+<style>
+		/* Default styles */
+	    body {
+	        background-color: var(--bg-color, #fff);
+	        color: var(--text-color, #000);
+	    }
+
+		/* Light theme */
+        .light-theme {
+            --bg-color: #ffffff;
+            --text-color: #000000;
+            --anchor-color: blue;
+            --form-control-color: black;
+           	--form-auth-color: #f1f7fe !important;
+           	--select-background-color: transparent; 
+			--select-color: black;
+		  /* Primary Colors */
+		  --color-primary-yellow: #facc15;
+		  --color-primary-blue: #0d6efd;
+
+		  /* Secondary Colors */
+		  --color-secondary-gray: #6b7280;
+		  --color-secondary-dark-gray: #4b5563;
+
+		  /* Background & Text */
+		  --color-bg: #ffffff;
+		  --color-text: #111827;
+
+		  /* Input & Border */
+		  --color-input-bg: #f9fafb;
+		  --color-border: #d1d5db;
+
+		  /* Navbar */
+		  --color-navbar-bg: #f9fafb;
+		  --color-navbar-text: #111827;
+
+		  /* Switch (Checkbox) */
+		  --color-switch-checked: var(--color-primary-blue);
+
+		  /* Scrollable Container */
+		  --scrollbar-bg: transparent;
+		  --scrollbar-thumb: var(--color-secondary-dark-gray);
+		}
+
+        /* Dark theme */
+        .dark-theme {
+            --bg-color: #121212;
+            --text-color: white;
+            --anchor-color: lightgreen;
+            --form-control-color: white !important;
+           	--form-auth-color: rgb(143, 143, 153) !important;
+           	--select-background-color: black; 
+			--select-color: white;
+			  --color-primary-yellow: #facc15; /* Keep yellow consistent */
+			  --color-primary-blue: #0d6efd;   /* Keep blue consistent */
+
+			  --color-secondary-gray: #9ca3af;
+			  --color-secondary-dark-gray: #374151;
+
+			  --color-bg: #1f2937;
+			  --color-text: #e0e0e0;
+
+			  /* Input & Border in Dark Mode */
+			  --color-input-bg: #374151;
+			  --color-border: #4b5563;
+
+			  /* Navbar */
+			  --color-navbar-bg: #1f2937;
+			  --color-navbar-text: #e0e0e0;
+
+			  --color-switch-checked: var(--color-primary-yellow); /* In dark mode, switch glows yellow */
+		}
+
+		/* Apply Background & Text Colors */
+		body {
+		  background-color: var(--color-bg);
+		  color: var(--color-text);
+		}
+
+		/* Make container text follow default text color */
+		.container,
+		.container-fluid {
+		  background-color: transparent !important;
+		  color: var(--color-text) !important;
+		}
+
+		/* Remove underlines from all anchor tags */
+		a {
+		  text-decoration: none;
+		  color: inherit;
+		}
+
+		/* Navbar Styling */
+		.navbar {
+		  background-color: var(--color-navbar-bg) !important;
+		}
+		.navbar .nav-link,
+		.navbar-brand {
+		  color: var(--color-navbar-text) !important;
+		}
+
+		/* ✨ Custom Unique Touches */
+
+		/* Hero Section Gradient: Blue → Yellow */
+		.hero-gradient {
+		  background: linear-gradient(
+		    135deg,
+		    var(--color-primary-blue),
+		    var(--color-primary-yellow)
+		  );
+		}
+
+		/* Text Gradient: Yellow → Blue */
+		.text-gradient {
+		  background: linear-gradient(
+		    90deg,
+		    var(--color-primary-yellow),
+		    var(--color-primary-blue)
+		  );
+		  -webkit-background-clip: text;
+		  -webkit-text-fill-color: transparent;
+		}
+
+		/* Button Glow Effect */
+		.btn-glow {
+		  transition: box-shadow 0.3s ease-in-out;
+		}
+		.btn-glow:hover {
+		  box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+		}
+
+		/* Fade-in Animation */
+		.fade-in {
+		  animation: fadeIn 0.6s ease-out forwards;
+		}
+		.invisible {
+		  visibility: hidden;
+		}
+		.visible {
+		  visibility: visible;
+		}
+
+		@keyframes fadeIn {
+		  from {
+		    opacity: 0;
+		    transform: translateY(10px);
+		  }
+		  to {
+		    opacity: 1;
+		    transform: translateY(0);
+		  }
+		}
+
+		/* Card Container Width */
+		.form-container {
+		  max-width: 480px;
+		  width: 100%;
+		}
+
+		/* Dark-Mode Background for Navbar (Fallback) */
+		.dark-mode-bg {
+		  background-color: var(--color-navbar-bg) !important;
+		}
+
+		/* Override When <html> Has class="dark" */
+		.light-theme .dark-mode-bg {
+		  background-color: var(--color-navbar-bg) !important;
+		}
+
+		/* Switch (Checkbox) Styling */
+		.form-check-input:checked {
+		  background-color: var(--color-switch-checked);
+		  border-color: var(--color-switch-checked);
+		}
+
+		/* Scrollable Section */
+		.scrollable {
+		  height: 80vh !important;
+		  overflow-y: auto;
+		  scrollbar-width: thin;
+		  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-bg);
+		}
+
+		/* Webkit Scrollbar Customization */
+		.scrollable::-webkit-scrollbar {
+		  width: 8px;
+		}
+		.scrollable::-webkit-scrollbar-track {
+		  background: var(--scrollbar-bg);
+		}
+		.scrollable::-webkit-scrollbar-thumb {
+		  background-color: var(--scrollbar-thumb);
+		  border-radius: 4px;
+		  border: 2px solid var(--scrollbar-bg);
+		}
+
+		/* ============================
+		   Custom Navbar Styles
+		   ============================ */
+
+		/* Base nav-link padding, font-weight, and text-color */
+		.navbar-nav .nav-link {
+		  padding: 0.75rem 1rem;
+		  font-weight: 500;
+		  color: var(--color-text);
+		  transition: color 0.2s ease;
+		}
+
+		/* Hover / focus styles for nav-links */
+		.navbar-nav .nav-link:hover,
+		.navbar-nav .nav-link:focus {
+		  color: var(--color-primary-blue);
+		}
+
+		:root {
+		  --ui-active-bg: linear-gradient(135deg, rgba(var(--bs-primary-rgb, 13,110,253),0.12), rgba(var(--bs-warning-rgb, 255,193,7),0.12));
+		  --ui-active-color: var(--color-text);
+		  --ui-active-border: rgba(var(--bs-primary-rgb,13,110,253), 0.25);
+		}
+
+		body[data-bs-theme="dark"],
+		.dark-theme {
+		  --ui-active-color: rgba(255,255,255,0.92);
+		}
+
+		/* Unified active-state styling (scoped: avoids global .active collisions) */
+		.navbar-nav .nav-link.active,
+		.navbar-nav .nav-link.active:focus,
+		.navbar-nav .nav-link.active:hover,
+		.nav-pills .nav-link.active,
+		.nav-pills .nav-link.active:focus,
+		.nav-pills .nav-link.active:hover,
+		.nav-pills .show > .nav-link,
+		.nav-pills .show > .nav-link:focus,
+		.nav-pills .show > .nav-link:hover,
+		.nav-tabs .nav-link.active,
+		.nav-tabs .nav-link.active:focus,
+		.nav-tabs .nav-link.active:hover,
+		.nav-tabs .nav-item.show .nav-link,
+		.nav-tabs .nav-item.show .nav-link:focus,
+		.nav-tabs .nav-item.show .nav-link:hover,
+		.dropdown-menu .dropdown-item.active,
+		.list-group .list-group-item.active,
+		.page-item.active .page-link,
+		.btn.active,
+		.btn-check:checked + .btn {
+		  background-image: var(--ui-active-bg) !important;
+		  background-color: transparent !important;
+		  color: var(--ui-active-color) !important;
+		  border-color: var(--ui-active-border) !important;
+		}
+
+		.tab-content h4,
+		.tab-pane h4 {
+		  color: var(--color-text);
+		}
+
+		body[data-bs-theme="dark"] .tab-content h4,
+		body[data-bs-theme="dark"] .tab-pane h4,
+		.dark-theme .tab-content h4,
+		.dark-theme .tab-pane h4 {
+		  color: rgba(255,255,255,0.92) !important;
+		}
+
+		/* Active link indicator (underline) */
+		.navbar-nav .nav-link.active {
+		  text-decoration: underline;
+		}
+
+		/* On smaller screens (≤ 992px), stack items & add spacing */
+		@media (max-width: 992px) {
+		  .navbar-nav {
+		    background-color: var(--color-bg);
+		    padding: 1rem 1.5rem;
+		  }
+		  .navbar-nav .nav-item {
+		    margin-bottom: 0.5rem;
+		  }
+		  /* Remove bottom margin on the last item */
+		  .navbar-nav .nav-item:last-child {
+		    margin-bottom: 0;
+		  }
+		}
+
+		/* Ensure the theme-switch stays aligned on all breakpoints */
+		.navbar-nav .form-check.form-switch {
+		  padding-left: 0.5rem;
+		  padding-right: 0.5rem;
+		}
+
+		/* Override Bootstrap dropdown caret color in dark mode */
+		.light-theme .navbar-nav .nav-link {
+		  color: var(--color-text) !important;
+		}
+		.light-theme .navbar-nav .nav-link:hover {
+		  color: var(--color-primary-yellow) !important;
+		}
+
+		/* Keep sticky nav higher than other elements */
+		.navbar.sticky-top {
+		  z-index: 1020; /* higher than default content but below modals (Bootstrap modal is 1050) */
+		}
+
+		/* ============================================================================
+		   ❶ Container & Card Styles
+		   ============================================================================ */
+		.login-card {
+		  background-color: var(--color-bg);
+		  color: var(--color-text);
+		  border-radius: 0.75rem;                  /* ~12px rounding */
+		  padding: 2rem;                           /* 32px padding inside */
+		  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08); /* subtle shadow */
+		  transition: background-color 0.3s ease, color 0.3s ease,
+		              box-shadow 0.3s ease;
+		}
+
+		/* On hover/focus within the form, slightly elevate card */
+		.login-card:hover,
+		.login-card:focus-within {
+		  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+		}
+
+		/* ============================================================================
+		   ❷ Title Styles
+		   ============================================================================ */
+		.login-title {
+		  font-size: 1.75rem;   /* ~28px */
+		  font-weight: 700;
+		  margin-bottom: 1.5rem; /* 24px */
+		  text-align: center;
+		  color: var(--color-primary-blue);
+		  transition: color 0.3s ease;
+		}
+
+		/* In dark mode, flip title to yellow for better contrast */
+		.light-theme .login-title {
+		  color: var(--color-primary-yellow);
+		}
+
+		/* ============================================================================
+		   ❸ Input Group & Labels
+		   ============================================================================ */
+		.input-group {
+		  margin-bottom: 1rem; /* 16px spacing between fields */
+		  display: flex;
+		  flex-direction: column;
+		}
+
+		.input-label {
+		  font-size: 0.875rem;        /* ~14px */
+		  font-weight: 500;
+		  margin-bottom: 0.5rem;      /* 8px under label */
+		  color: var(--color-text);
+		  transition: color 0.3s ease;
+		}
+
+		.light-theme .input-label {
+		  color: var(--color-text);
+		}
+
+		/* ----------------------------------------
+		   ❹ Input & Select Field: Always Visible Border-Bottom
+		   ---------------------------------------- */
+		.input-field {
+		  background-color: var(--color-input-bg);
+		  color: var(--color-text);
+		  font-size: 1rem;          /* 16px */
+		  padding: 0.75rem 1rem;    /* 12px 16px */
+		  border: none;
+		  border-bottom: 1px solid var(--color-border);
+		  border-radius: 0;         /* remove full rounding */
+		  outline: none;
+		  transition:
+		    background-color 0.3s ease,
+		    border-bottom-color 0.3s ease,
+		    box-shadow 0.3s ease,
+		    color 0.3s ease;
+		}
+
+		/* Focus state: change underline color */
+		.input-field:focus {
+		  border-bottom-color: var(--color-primary-blue);
+		  box-shadow: 0 2px 0 0 var(--color-primary-blue);
+		}
+
+		/* Dark-mode: focused underline switches to primary-yellow */
+		.light-theme .input-field:focus {
+		  border-bottom-color: var(--color-primary-yellow);
+		  box-shadow: 0 2px 0 0 var(--color-primary-yellow);
+		}
+
+		/* Placeholder styling */
+		.input-field::placeholder {
+		  color: var(--color-secondary-gray);
+		}
+
+		/* ----------------------------------------
+		   ❺ Unified Styling for Select (with arrow and underline)
+		   ---------------------------------------- */
+		select.input-field {
+		  -webkit-appearance: none;
+		  -moz-appearance: none;
+		  appearance: none;
+		  background-color: var(--color-input-bg);
+		  color: var(--color-text);
+		  font-size: 1rem;
+		  padding: 0.75rem 1rem;
+		  border: none;
+		  border-bottom: 1px solid var(--color-border);
+		  border-radius: 0;
+		  outline: none;
+		  transition:
+		    background-color 0.3s ease,
+		    border-bottom-color 0.3s ease,
+		    box-shadow 0.3s ease,
+		    color 0.3s ease;
+		  /* Optional: down-arrow icon on the right */
+		  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg width='10' height='7' viewBox='0 0 10 7' xmlns='http://www.w3.org/2000/svg'%3e%3cpolygon points='0,0 10,0 5,7' fill='%236B7280'/%3e%3c/svg%3e");
+		  background-repeat: no-repeat;
+		  background-position: right 1rem center;
+		  background-size: 0.65rem;
+		  padding-right: 2.5rem; /* space for arrow */
+		}
+
+		/* Focus state for select: brand-colored underline and arrow tint */
+		select.input-field:focus {
+		  border-bottom-color: var(--color-primary-blue);
+		  box-shadow: 0 2px 0 0 var(--color-primary-blue);
+		  filter: hue-rotate(210deg) brightness(1.2);
+		}
+
+		/* Dark-mode: select-focus underline to yellow and arrow tint */
+		.light-theme select.input-field:focus {
+		  border-bottom-color: var(--color-primary-yellow);
+		  box-shadow: 0 2px 0 0 var(--color-primary-yellow);
+		  filter: hue-rotate(50deg) brightness(1.2);
+		}
+
+		/* ----------------------------------------
+		   ❻ Dropdown Option Styling (Browser Support Varies)
+		   ---------------------------------------- */
+		/* Light mode: options have light BG + dark text */
+		select.input-field option {
+		  background-color: var(--color-bg);
+		  color: var(--color-text);
+		}
+
+		/* Dark mode: options match dark BG + light text */
+		.light-theme select.input-field option {
+		  background-color: var(--color-bg);
+		  color: var(--color-text);
+		}
+
+		/* Highlighted (hover/selected) option in light mode */
+		select.input-field option:hover,
+		select.input-field option:checked {
+		  background-color: var(--color-primary-blue);
+		  color: #ffffff;
+		}
+
+		/* Highlighted (hover/selected) option in dark mode */
+		.light-theme select.input-field option:hover,
+		.light-theme select.input-field option:checked {
+		  background-color: var(--color-primary-yellow);
+		  color: #1f2937;
+		}
+
+		/* ============================================================================
+		   ❼ Button Styles
+		   ============================================================================ */
+		.btn-login {
+		  width: 100%;
+		  padding: 0.75rem 1rem;      /* 12px 16px */
+		  font-size: 1rem;            /* 16px */
+		  font-weight: 600;
+		  border: none;
+		  border-radius: 0.5rem;      /* ~8px rounding */
+		  background-color: var(--color-primary-blue);
+		  color: #ffffff;
+		  cursor: pointer;
+		  transition:
+		    background-color 0.3s ease,
+		    transform 0.2s ease,
+		    box-shadow 0.2s ease;
+		}
+
+		/* Hover: slightly darker blue and a bit of lift */
+		.btn-login:hover {
+		  background-color: #0b5ed7;  /* ~10% darker than #0d6efd */
+		  transform: translateY(-1px);
+		  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+		}
+
+		/* Active/Pressed state */
+		.btn-login:active {
+		  transform: translateY(0);
+		  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+		}
+
+		/* In dark mode: button flips to yellow for high contrast */
+		.light-theme .btn-login {
+		  background-color: var(--color-primary-yellow);
+		  color: #1f2937; /* nearly-black text on yellow */
+		}
+		.light-theme .btn-login:hover {
+		  background-color: #e0b40f;  /* ~10% darker than #facc15 */
+		}
+
+		/* ============================================================================
+		   ❽ Responsive Behavior
+		   ============================================================================ */
+		/* The parent .col-* wrapper handles centering.
+		   Ensure form cards never exceed a narrow width. */
+		.login-card {
+		  max-width: 100%;
+		}
+		@media (min-width: 576px) {
+		  .login-card {
+		    max-width: 420px; /* ~26rem */
+		    margin: 0 auto;   /* center horizontally */
+		  }
+		}
+
+
+		.form-control, .form-select{
+			border: none;
+			border-bottom: 0.5px solid lightgreen;
+			border-radius: 5px;
+			background: transparent;
+			color: var(--form-control-color);
+			--bs-body-bg: transparent !important;
+		}
+
+
+		.form-control a, .form-select a, .auth a{
+			color: var(--anchor-color);
+		}
+
+		.auth select{
+			background-color: var(--select-background-color); 
+			color: var(--select-color);
+		}
+
+		.auth{
+			background-color: var(--form-auth-color);
+		}
+	</style>
+	<?php do_action(plugin_id().'_main_menu',['links'=>$links])?>
+
+

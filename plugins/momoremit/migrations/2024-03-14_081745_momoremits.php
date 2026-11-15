@@ -1,0 +1,64 @@
+<?php
+
+namespace Migration;
+
+defined('FCPATH') or die("Direct script access denied");
+
+/**
+ * Momoremits class
+ */
+class Momoremits extends Migration
+{
+
+	public function up()
+	{
+
+		$this->addColumn('id int unsigned auto_increment');
+		$this->addColumn('network varchar(50) null');
+		$this->addColumn('transaction_type varchar(50) null');
+		$this->addColumn('category varchar(50) null');
+		$this->addColumn('sending_category varchar(50) null');
+		$this->addColumn('phone varchar(50) null');
+		$this->addColumn('amount varchar(50) null');
+		$this->addColumn('balance_after varchar(50) null');
+		$this->addColumn('wallet_in_id varchar(50) null');
+		$this->addColumn('wallet_out_id varchar(50) null');
+		$this->addColumn('receiver varchar(50) null');
+		$this->addColumn('token varchar(50) null');
+		$this->addColumn('id_type varchar(50) null');
+		$this->addColumn('id_number varchar(50) null');
+		$this->addColumn('secret_code varchar(50) null');
+		$this->addColumn('charge varchar(50) null');
+		$this->addColumn('slug varchar(100) null');
+		$this->addColumn('created_by varchar(100) null');
+		$this->addColumn('updated_by varchar(100) null');
+		$this->addColumn('disabled tinyint(1) unsigned default 0');
+
+		$this->addColumn('deleted tinyint(1) unsigned default 0');
+		$this->addColumn('date_created datetime default null');
+		$this->addColumn('date_updated datetime default null');
+		$this->addColumn('date_deleted datetime default null');
+
+		$this->addPrimaryKey('id');
+		$this->addKey('network');
+		$this->addKey('transaction_type');
+		$this->addKey('category');
+		$this->addKey('sending_category');
+		$this->addKey('receiver');
+		$this->addKey('wallet_in_id');
+		$this->addKey('wallet_out_id');
+		$this->addKey('token');
+		$this->addKey('slug');
+		$this->addKey('disabled');
+		$this->addKey('created_by');
+		$this->addKey('updated_by');
+ 
+		$this->createTable('momoremits');
+ 
+	}
+
+	public function down()
+	{
+		$this->dropTable('momoremits');
+	}
+}

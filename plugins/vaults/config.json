@@ -1,0 +1,16 @@
+{
+  "name": "Vaults",
+  "version": "1.0.0",
+  "id": "vaults",
+  "author": "Tormor Group",
+  "thumbnail": "thumbnail.jpg",
+  "active": true,
+  "index": 4,
+  "routes": {
+    "on": ["admin"],
+    "off": []
+  },
+  "dependencies": {
+    "basic-admin": "1.0.0"
+  }
+}

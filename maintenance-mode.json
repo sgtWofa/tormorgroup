@@ -1,0 +1,10 @@
+{
+    "enabled": 0,
+    "allowed_users": [
+        1
+    ],
+    "duration_minutes": 120,
+    "started_at": "",
+    "ends_at": "",
+    "updated_at": "2026-04-16 12:31:27"
+}

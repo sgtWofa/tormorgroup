@@ -1,0 +1,18 @@
+{
+	"name":"Payment services",
+	"version":"1.0.0",
+	"id":"payment_services",
+	"author":"WofaSam",
+	"author website":"",
+	"thumbnail":"thumbnail.jpg",
+	"active":true,
+	"index":3,
+	"routes": {
+		"on":["admin"],
+		"off":[]
+	},
+	"dependencies": {
+		"basic-admin":"1.0.0"
+	}
+
+}

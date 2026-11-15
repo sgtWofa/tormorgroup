@@ -1,0 +1,17 @@
+{
+	"name":"Dashboard",
+	"version":"1.0.0",
+	"id":"profile",
+	"author":"SGT GLOBALGH",
+	"author website":"",
+	"thumbnail":"thumbnail.jpg",
+	"active":true,
+	"index":0,
+	"routes": {
+		"on":["admin"],
+		"off":[]
+	},
+	"dependencies": {
+	}
+
+}

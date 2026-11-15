@@ -1,0 +1,504 @@
+/* 🌟 Theme Variables for Light and Dark Modes */
+a {
+  text-decoration: none;
+}
+
+/* Light Mode Variables */
+:root {
+  /* Primary Colors */
+  --color-primary-yellow: #facc15;
+  --color-primary-blue: #0d6efd;
+
+  /* Secondary Colors */
+  --color-secondary-gray: #6b7280;
+  --color-secondary-dark-gray: #4b5563;
+
+  /* Background & Text */
+  --color-bg: #ffffff;
+  --color-text: #111827;
+
+  /* Input & Border */
+  --color-input-bg: #f9fafb;
+  --color-border: #d1d5db;
+
+  /* Navbar */
+  --color-navbar-bg: #f9fafb;
+  --color-navbar-text: #111827;
+
+  /* Switch (Checkbox) */
+  --color-switch-checked: var(--color-primary-blue);
+
+  /* Scrollable Container */
+  --scrollbar-bg: transparent;
+  --scrollbar-thumb: var(--color-secondary-dark-gray);
+
+	--ui-active-bg: linear-gradient(135deg, rgba(var(--bs-primary-rgb, 13,110,253),0.12), rgba(var(--bs-warning-rgb, 255,193,7),0.12));
+	--ui-active-color: var(--bs-body-color);
+	--ui-active-border: rgba(var(--bs-primary-rgb,13,110,253), 0.25);
+}
+
+/* Dark Mode Overrides */
+html[data-bs-theme="dark"] {
+  --color-primary-yellow: #facc15; /* Keep yellow consistent */
+  --color-primary-blue: #0d6efd;   /* Keep blue consistent */
+
+  --color-secondary-gray: #9ca3af;
+  --color-secondary-dark-gray: #374151;
+
+  /* Input & Border in Dark Mode */
+  --color-input-bg: #374151;
+  --color-border: #4b5563;
+
+  /* Switch (Checkbox) in Dark Mode */
+  --color-switch-checked: var(--color-primary-yellow); /* In dark mode, switch glows yellow */
+	--ui-active-color: rgba(255,255,255,0.92);
+}
+
+/* Make container text follow default text color */
+.container,
+.container-fluid {
+  background-color: transparent !important;
+}
+
+/* Text Gradient: Yellow → Blue */
+.text-gradient {
+  background: linear-gradient(
+    90deg,
+    var(--color-primary-yellow),
+    var(--color-primary-blue)
+  );
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Button Glow Effect */
+.btn-glow {
+  transition: box-shadow 0.3s ease-in-out;
+}
+.btn-glow:hover {
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+}
+
+/* Fade-in Animation */
+.fade-in {
+  animation: fadeIn 0.6s ease-out forwards;
+}
+.invisible {
+  visibility: hidden;
+}
+.visible {
+  visibility: visible;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Card Container Width */
+.form-container {
+  max-width: 480px;
+  width: 100%;
+}
+
+/* Dark-Mode Background for Navbar (Fallback) */
+.dark-mode-bg {
+  background-color: var(--color-navbar-bg) !important;
+}
+
+/* Override When <html data-bs-theme="light"> */
+html[data-bs-theme="light"] .dark-mode-bg {
+  background-color: var(--color-navbar-bg) !important;
+}
+
+/* Switch (Checkbox) Styling */
+.form-check-input:checked {
+  background-color: var(--color-switch-checked);
+  border-color: var(--color-switch-checked);
+}
+
+.is-invalid {
+  border-color: red !important;
+}
+
+/* Scrollable Section */
+.scrollable {
+  height: 80vh !important;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-bg);
+}
+
+/* Webkit Scrollbar Customization */
+.scrollable::-webkit-scrollbar {
+  width: 8px;
+}
+.scrollable::-webkit-scrollbar-track {
+  background: var(--scrollbar-bg);
+}
+.scrollable::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb);
+  border-radius: 4px;
+  border: 2px solid var(--scrollbar-bg);
+}
+
+/* ============================
+   Custom Navbar Styles
+   ============================ */
+
+/* Base nav-link padding, font-weight, and text-color */
+.navbar-nav .nav-link {
+  padding: 0.75rem 1rem;
+  font-weight: 500;
+  color: var(--color-text);
+  transition: color 0.2s ease;
+}
+
+/* Hover / focus styles for nav-links */
+.navbar-nav .nav-link:hover,
+.navbar-nav .nav-link:focus {
+  color: var(--color-primary-blue);
+}
+
+/* Active link indicator (underline) */
+.navbar-nav .nav-link.active {
+  color: var(--color-primary-blue);
+  text-decoration: underline;
+}
+
+/* On smaller screens (≤ 992px), stack items & add spacing */
+@media (max-width: 992px) {
+  .navbar-nav {
+    background-color: var(--color-bg);
+    padding: 1rem 1.5rem;
+  }
+  .navbar-nav .nav-item {
+    margin-bottom: 0.5rem;
+  }
+  /* Remove bottom margin on the last item */
+  .navbar-nav .nav-item:last-child {
+    margin-bottom: 0;
+  }
+}
+
+/* Ensure the theme-switch stays aligned on all breakpoints */
+.navbar-nav .form-check.form-switch {
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+}
+
+/* Override Bootstrap dropdown caret color in dark mode */
+html[data-bs-theme="light"] .navbar-nav .nav-link {
+  color: var(--color-text) !important;
+}
+html[data-bs-theme="light"] .navbar-nav .nav-link:hover {
+  color: var(--color-primary-yellow) !important;
+}
+
+/* Keep sticky nav higher than other elements */
+.navbar.sticky-top {
+  z-index: 1020; /* higher than default content but below modals (Bootstrap modal is 1050) */
+}
+
+.nav-pills .nav-link.active,
+.nav-pills .nav-link.active:focus,
+.nav-pills .nav-link.active:hover,
+.nav-pills .show > .nav-link,
+.nav-pills .show > .nav-link:focus,
+.nav-pills .show > .nav-link:hover,
+.nav-tabs .nav-link.active,
+.nav-tabs .nav-link.active:focus,
+.nav-tabs .nav-link.active:hover,
+.nav-tabs .nav-item.show .nav-link,
+.nav-tabs .nav-item.show .nav-link:focus,
+.nav-tabs .nav-item.show .nav-link:hover {
+	background-image: var(--ui-active-bg) !important;
+	background-color: transparent !important;
+	color: var(--ui-active-color) !important;
+	border-color: var(--ui-active-border) !important;
+}
+
+.tab-content h4,
+.tab-pane h4 {
+	color: var(--bs-body-color);
+}
+
+html[data-bs-theme="dark"] .tab-content h4,
+html[data-bs-theme="dark"] .tab-pane h4 {
+	color: rgba(255,255,255,0.92) !important;
+}
+
+/* ============================================================================ 
+   ❶ Container & Card Styles
+   ============================================================================ */
+.login-card {
+  color: var(--color-text);
+  border-radius: 0.75rem;                  /* ~12px rounding */
+  padding: 2rem;                           /* 32px padding inside */
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08); /* subtle shadow */
+  transition: background-color 0.3s ease, color 0.3s ease,
+              box-shadow 0.3s ease;
+}
+
+/* On hover/focus within the form, slightly elevate card */
+.login-card:hover,
+.login-card:focus-within {
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+}
+
+/* ============================================================================ 
+   ❷ Title Styles
+   ============================================================================ */
+.login-title {
+  font-size: 1.75rem;   /* ~28px */
+  font-weight: 700;
+  margin-bottom: 1.5rem; /* 24px */
+  text-align: center;
+  color: var(--color-primary-blue);
+  transition: color 0.3s ease;
+}
+
+/* In dark mode, flip title to yellow for better contrast */
+html[data-bs-theme="light"] .login-title {
+  color: var(--color-primary-yellow);
+}
+
+/* ============================================================================ 
+   ❸ Input Group & Labels
+   ============================================================================ */
+.custom-input-group {
+  margin-bottom: 1rem; /* 16px spacing between fields */
+  display: flex;
+  flex-direction: column;
+}
+
+.custom-input-label {
+  font-size: 0.875rem;        /* ~14px */
+  font-weight: 500;
+  margin-bottom: 0.5rem;      /* 8px under label */
+  color: var(--color-text);
+  transition: color 0.3s ease;
+}
+
+html[data-bs-theme="light"] .custom-input-label {
+  color: var(--color-text);
+}
+
+/* ----------------------------------------
+   ❹ Input & Select Field: Always Visible Border-Bottom
+   ---------------------------------------- */
+.custom-input-field {
+  background-color: var(--color-input-bg);
+  color: var(--color-text);
+  font-size: 1rem;          /* 16px */
+  padding: 0.75rem 1rem;    /* 12px 16px */
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  border-radius: 0;         /* remove full rounding */
+  outline: none;
+  transition:
+    background-color 0.3s ease,
+    border-bottom-color 0.3s ease,
+    box-shadow 0.3s ease,
+    color 0.3s ease;
+}
+
+/* Focus state: change underline color */
+.custom-input-field:focus {
+  border-bottom-color: var(--color-primary-blue);
+  box-shadow: 0 2px 0 0 var(--color-primary-blue);
+}
+
+/* Dark-mode: focused underline switches to primary-yellow */
+html[data-bs-theme="light"] .custom-input-field:focus {
+  border-bottom-color: var(--color-primary-yellow);
+  box-shadow: 0 2px 0 0 var(--color-primary-yellow);
+}
+
+/* Placeholder styling */
+.custom-input-field::placeholder {
+  color: var(--color-secondary-gray);
+}
+
+/* ----------------------------------------
+   ❺ Unified Styling for Select (with arrow and underline)
+   ---------------------------------------- */
+select.custom-input-field {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-color: var(--color-input-bg);
+  color: var(--color-text);
+  font-size: 1rem;
+  padding: 0.75rem 1rem;
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  border-radius: 0;
+  outline: none;
+  transition:
+    background-color 0.3s ease,
+    border-bottom-color 0.3s ease,
+    box-shadow 0.3s ease,
+    color 0.3s ease;
+  /* Optional: down-arrow icon on the right */
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg width='10' height='7' viewBox='0 0 10 7' xmlns='http://www.w3.org/2000/svg'%3e%3cpolygon points='0,0 10,0 5,7' fill='%236B7280'/%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+  background-size: 0.65rem;
+  padding-right: 2.5rem; /* space for arrow */
+}
+
+/* Focus state for select: brand-colored underline and arrow tint */
+select.custom-input-field:focus {
+  border-bottom-color: var(--color-primary-blue);
+  box-shadow: 0 2px 0 0 var(--color-primary-blue);
+  filter: hue-rotate(210deg) brightness(1.2);
+}
+
+/* Dark-mode: select-focus underline to yellow and arrow tint */
+html[data-bs-theme="light"] select.custom-input-field:focus {
+  border-bottom-color: var(--color-primary-yellow);
+  box-shadow: 0 2px 0 0 var(--color-primary-yellow);
+  filter: hue-rotate(50deg) brightness(1.2);
+}
+
+/* ----------------------------------------
+   ❻ Dropdown Option Styling (Browser Support Varies)
+   ---------------------------------------- */
+/* Light mode: options have light BG + dark text */
+select.custom-input-field option {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+}
+
+/* Dark mode: options match dark BG + light text */
+html[data-bs-theme="light"] select.custom-input-field option {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+}
+
+/* Highlighted (hover/selected) option in light mode */
+select.custom-input-field option:hover,
+select.custom-input-field option:checked {
+  background-color: var(--color-primary-blue);
+  color: #ffffff;
+}
+
+/* Highlighted (hover/selected) option in dark mode */
+html[data-bs-theme="light"] select.custom-input-field option:hover,
+html[data-bs-theme="light"] select.custom-input-field option:checked {
+  background-color: var(--color-primary-yellow);
+  color: #1f2937;
+}
+
+/* ============================================================================ 
+   ❼ Button Styles
+   ============================================================================ */
+.btn-login {
+  width: 100%;
+  padding: 0.75rem 1rem;      /* 12px 16px */
+  font-size: 1rem;            /* 16px */
+  font-weight: 600;
+  border: none;
+  border-radius: 0.5rem;      /* ~8px rounding */
+  background-color: var(--color-primary-blue);
+  color: #ffffff;
+  cursor: pointer;
+  transition:
+    background-color 0.3s ease,
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+/* Hover: slightly darker blue and a bit of lift */
+.btn-login:hover {
+  background-color: #0b5ed7;  /* ~10% darker than #0d6efd */
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Active/Pressed state */
+.btn-login:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+/* In dark mode: button flips to yellow for high contrast */
+html[data-bs-theme="light"] .btn-login {
+  background-color: var(--color-primary-yellow);
+  color: #1f2937; /* nearly-black text on yellow */
+}
+html[data-bs-theme="light"] .btn-login:hover {
+  background-color: #e0b40f;  /* ~10% darker than #facc15 */
+}
+
+/* ============================================================================ 
+   ❽ Responsive Behavior
+   ============================================================================ */
+/* The parent .col-* wrapper handles centering.
+   Ensure form cards never exceed a narrow width. */
+.login-card {
+  max-width: 100%;
+}
+@media (min-width: 576px) {
+  .login-card {
+    max-width: 420px; /* ~26rem */
+    margin: 0 auto;   /* center horizontally */
+  }
+}
+
+@media (max-width: 576px) {
+
+  html,
+  body {
+    font-size: 15px !important;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  h1 { font-size: 20px !important; }
+  h2 { font-size: 18px !important; }
+  h3 { font-size: 16px !important; }
+
+  .form-control,
+  .form-select,
+  .btn {
+    font-size: 15px !important;
+  }
+
+  .form-label,
+  label,
+  small,
+  .text-muted {
+    font-size: 13px !important;
+  }
+
+  .container,
+  .container-fluid {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+
+  main {
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+  }
+
+  form {
+    margin-bottom: calc(5rem + env(safe-area-inset-bottom));
+  }
+
+  .table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  table {
+    width: 100%;
+  }
+}

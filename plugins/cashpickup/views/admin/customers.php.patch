@@ -1,0 +1,50 @@
+*** Begin Patch
+*** Update File: c:\xampp\htdocs\www\tormorgroup\plugins\cashpickup\views\admin\customers.php
+@@
+-																});
+-															}
+-														}catch(e){console.error('timeseries error', e)}
+-														}
+-													}catch(e){console.error('CRM chart error', e)}
++																});
++															}
++														}catch(e){console.error('timeseries error', e)}
++														}
++													function drawTopAgents(){
++															try{
++																const canvas4 = document.getElementById('crmTopAgentsChart');
++																if(!canvas4) return;
++																const ctx4 = canvas4.getContext('2d');
++																if(!ctx4) return;
++																if (canvas4._chartInstance) canvas4._chartInstance.destroy();
++																const agents = payload && payload.analytics && Array.isArray(payload.analytics.agents) ? payload.analytics.agents : [];
++																if(!agents || !agents.length) return;
++																const labels = agents.map(r => r.title || r.agent_name || '');
++																const values = agents.map(r => Number(r.rate || 0));
++																canvas4._chartInstance = new Chart(ctx4, {
++																	type: 'bar',
++																	data: { labels: labels, datasets: [{ label: 'Returning rate (%)', data: values, backgroundColor: 'rgba(59,130,246,0.7)' }] },
++																	options: { responsive: true, indexAxis: 'y', scales: { x: { beginAtZero: true, max: 100 } } }
++																});
++															}catch(e){console.error('top agents error', e)}
++														}
++														function drawTopCustomers(){
++															try{
++																const canvas5 = document.getElementById('crmTopCustomersChart');
++																if(!canvas5) return;
++																const ctx5 = canvas5.getContext('2d');
++																if(!ctx5) return;
++																if (canvas5._chartInstance) canvas5._chartInstance.destroy();
++																const customers = payload && payload.analytics && Array.isArray(payload.analytics.customers) ? payload.analytics.customers : [];
++																if(!customers || !customers.length) return;
++																const labels = customers.map(r => r.title || r.customer_name || '');
++																const values = customers.map(r => Number(r.rate || 0));
++																canvas5._chartInstance = new Chart(ctx5, {
++																	type: 'bar',
++																	data: { labels: labels, datasets: [{ label: 'Returning rate (%)', data: values, backgroundColor: 'rgba(16,185,129,0.7)' }] },
++																	options: { responsive: true, indexAxis: 'y', scales: { x: { beginAtZero: true, max: 100 } } }
++																});
++															}catch(e){console.error('top customers error', e)}
++														}
++													}catch(e){console.error('CRM chart error', e)}
+*** End Patch

@@ -1,0 +1,3 @@
+/* Global shim to satisfy ROOT/assets/css/all.min.css
+   and reuse the header-footer plugin's icon set. */
+@import url("../../plugins/header-footer/assets/css/all.min.css");
