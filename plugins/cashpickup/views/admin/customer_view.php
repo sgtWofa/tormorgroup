@@ -704,7 +704,7 @@
 			'credit_repayment' => 'secondary',
 		];
 		?>
-		<div class="card border-0 shadow-sm">
+		<div class="card border-0 shadow-sm cashpickup-activity-results">
 			<div class="d-lg-none p-2 p-sm-3 cashpickup-activity-cards">
 				<?php if(empty($txRows)): ?>
 					<div class="text-center text-body-secondary py-4">No account activity matches these filters.</div>
@@ -753,19 +753,21 @@
 				<?php endif; ?>
 			</div>
 			<div class="d-none d-lg-block table-responsive">
-				<table class="table table-hover align-middle mb-0">
+				<table class="table table-hover align-middle mb-0 cashpickup-activity-table">
 					<thead>
-						<tr><th>Date</th><th>Activity / Reference</th><th>Status</th><th class="text-end">Cash in</th><th class="text-end">Cash out</th><th class="text-end">Credit / repayment</th><th class="text-end">Balance</th><th class="text-end">Action</th></tr>
+						<tr><th>Date</th><th>Activity / Reference</th><th>Status</th><th class="text-end">Cash flow</th><th class="text-end">Credit / repayment</th><th class="text-end">Balance</th><th class="text-end">Action</th></tr>
 					</thead>
 					<tbody>
 						<?php if(empty($txRows)): ?>
-							<tr><td colspan="8" class="text-center text-body-secondary py-4">No account activity matches these filters.</td></tr>
+							<tr><td colspan="7" class="text-center text-body-secondary py-4">No account activity matches these filters.</td></tr>
 						<?php else: ?>
 							<?php foreach($txRows as $tx): ?>
 								<?php
 									$type = (string)($tx->entry_type ?? 'payout');
 									$typeLabel = $typeLabels[$type] ?? ucfirst(str_replace('_', ' ', $type));
 									$typeClass = $typeClasses[$type] ?? 'secondary';
+									$received = (float)($tx->received_amount ?? 0);
+									$paid = (float)($tx->payout_amount ?? 0);
 									$credit = (float)($tx->credit_amount ?? 0);
 									$repayment = (float)($tx->credit_repayment_amount ?? 0);
 									$relatedId = (int)($tx->related_receive_id ?? $tx->id ?? 0);
@@ -778,8 +780,13 @@
 										<div class="small text-body-secondary"><?=esc(implode(' · ', array_filter([(string)($tx->source ?? ''), (string)($tx->payment_method ?? ''), trim((string)($tx->tracking_id ?? '')) !== '' ? 'Ref ' . (string)$tx->tracking_id : ''])))?></div>
 									</td>
 									<td><?=esc(trim((string)($tx->approval_status ?? '')) !== '' ? ucfirst((string)$tx->approval_status) : (string)($tx->transaction_status ?? 'Recorded'))?></td>
-									<td class="text-end text-success"><?=number_format((float)($tx->received_amount ?? 0), 2)?></td>
-									<td class="text-end text-danger"><?=number_format((float)($tx->payout_amount ?? 0), 2)?></td>
+									<td class="text-end">
+										<div class="d-inline-flex flex-column align-items-end gap-1">
+											<?php if($received > 0): ?><span class="cashpickup-flow-amount text-success"><i class="fa-solid fa-arrow-down me-1" aria-hidden="true"></i>GH&#8373; <?=number_format($received, 2)?></span><?php endif; ?>
+											<?php if($paid > 0): ?><span class="cashpickup-flow-amount text-danger"><i class="fa-solid fa-arrow-up me-1" aria-hidden="true"></i>GH&#8373; <?=number_format($paid, 2)?></span><?php endif; ?>
+											<?php if($received <= 0 && $paid <= 0): ?><span class="text-body-secondary">—</span><?php endif; ?>
+										</div>
+									</td>
 									<td class="text-end"><?=number_format($credit + $repayment, 2)?></td>
 									<td class="text-end fw-semibold"><?=number_format((float)($tx->balance_amount ?? 0), 2)?></td>
 									<td class="text-end"><?php if($relatedId > 0): ?><a class="btn btn-sm btn-outline-primary" href="<?=ROOT?>/<?=$admin_route?>/<?=$plugin_route?>/view/<?=$relatedId?>" aria-label="View details"><i class="fa fa-eye"></i></a><?php endif; ?></td>
@@ -802,6 +809,152 @@
 <?php if($isAjax){ $renderTxResults(); return; } ?>
 
 <style>
+	.cashpickup-customer-tabs{
+		gap:.35rem;
+		border-bottom:1px solid var(--bs-border-color);
+	}
+	.cashpickup-customer-tabs .nav-link{
+		border:0;
+		border-radius:.7rem .7rem 0 0;
+		color:var(--bs-secondary-color);
+		font-weight:600;
+		padding:.7rem 1rem;
+		transition:background-color .15s ease,color .15s ease;
+	}
+	.cashpickup-customer-tabs .nav-link:hover{
+		background:var(--bs-tertiary-bg);
+		color:var(--bs-emphasis-color);
+	}
+	.cashpickup-customer-tabs .nav-link.active{
+		background:rgba(var(--bs-primary-rgb),.1);
+		box-shadow:inset 0 -2px var(--bs-primary);
+		color:var(--bs-primary);
+	}
+	.cashpickup-activity-table,
+	.cashpickup-statement-table{
+		min-width:940px;
+	}
+	.cashpickup-activity-table thead th,
+	.cashpickup-statement-table thead th{
+		background:var(--bs-tertiary-bg);
+		border-bottom:1px solid var(--bs-border-color);
+		color:var(--bs-secondary-color);
+		font-size:.72rem;
+		font-weight:700;
+		letter-spacing:.045em;
+		padding:.85rem .75rem;
+		text-transform:uppercase;
+		vertical-align:middle;
+		white-space:nowrap;
+	}
+	.cashpickup-activity-table tbody td,
+	.cashpickup-statement-table tbody td{
+		border-color:var(--bs-border-color);
+		padding:.8rem .75rem;
+		vertical-align:middle;
+	}
+	.cashpickup-activity-table tbody tr:hover,
+	.cashpickup-statement-table tbody tr:hover{
+		background:var(--bs-tertiary-bg);
+	}
+	.cashpickup-flow-amount{
+		font-size:.8rem;
+		font-weight:700;
+		white-space:nowrap;
+	}
+	.cashpickup-statement-card{
+		border:1px solid var(--bs-border-color);
+		border-radius:1rem;
+		overflow:hidden;
+	}
+	.cashpickup-statement-card>.card-header{
+		background:linear-gradient(135deg,var(--bs-tertiary-bg),var(--bs-body-bg));
+		border-bottom:1px solid var(--bs-border-color);
+		padding:1rem 1.25rem;
+	}
+	.cashpickup-statement-card>.card-body{
+		background:var(--bs-body-bg);
+	}
+	.cashpickup-activity-filter{
+		border:1px solid var(--bs-border-color);
+		border-radius:1rem;
+	}
+	.cashpickup-activity-filter .card-body{
+		padding:1.1rem;
+	}
+	.cashpickup-activity-filter .form-label{
+		color:var(--bs-secondary-color);
+		font-size:.78rem;
+		font-weight:700;
+		margin-bottom:.4rem;
+	}
+	.cashpickup-activity-filter .form-control,
+	.cashpickup-activity-filter .form-select{
+		border-radius:.7rem;
+		min-height:2.65rem;
+	}
+	.cashpickup-activity-filter .form-control:focus,
+	.cashpickup-activity-filter .form-select:focus{
+		box-shadow:0 0 0 .2rem rgba(var(--bs-primary-rgb),.14);
+	}
+	.cashpickup-activity-filter .btn{
+		border-radius:.7rem;
+		font-weight:600;
+		min-height:2.65rem;
+	}
+	.cashpickup-activity-results{
+		border:1px solid var(--bs-border-color);
+		border-radius:1rem;
+		overflow:hidden;
+	}
+	.cashpickup-statement-type{
+		font-size:.7rem;
+		font-weight:700;
+		letter-spacing:.02em;
+		white-space:nowrap;
+	}
+	.cashpickup-statement-description{
+		min-width:12rem;
+		max-width:24rem;
+		overflow-wrap:anywhere;
+	}
+	.cashpickup-statement-table .cashpickup-statement-balance{
+		background:rgba(var(--bs-primary-rgb),.035);
+		font-weight:700;
+		white-space:nowrap;
+	}
+	.cashpickup-statement-flow{
+		min-width:9rem;
+	}
+	.cashpickup-statement-flow-line{
+		align-items:center;
+		display:flex;
+		gap:.45rem;
+		justify-content:space-between;
+		white-space:nowrap;
+	}
+	.cashpickup-statement-flow-line+.cashpickup-statement-flow-line{
+		border-top:1px solid var(--bs-border-color);
+		margin-top:.35rem;
+		padding-top:.35rem;
+	}
+	@media(max-width:767.98px){
+		.cashpickup-statement-table{
+			min-width:820px;
+		}
+		.cashpickup-customer-tabs{
+			flex-wrap:nowrap;
+			overflow-x:auto;
+			scrollbar-width:thin;
+		}
+		.cashpickup-customer-tabs .nav-link{
+			white-space:nowrap;
+		}
+		.cashpickup-statement-card>.card-header{
+			align-items:flex-start!important;
+			flex-direction:column;
+		}
+	}
 	.cashpickup-metrics-details>summary{list-style:none;cursor:pointer}
 	.cashpickup-metrics-details>summary::-webkit-details-marker{display:none}
 	.cashpickup-metrics-chevron{transition:transform .15s ease}
@@ -1058,7 +1211,7 @@
 	</div>
 <?php endif; ?>
 
-<ul class="nav nav-tabs mb-3" id="cashpickupCustomerTabs" role="tablist">
+<ul class="nav nav-tabs cashpickup-customer-tabs mb-3" id="cashpickupCustomerTabs" role="tablist">
 	<li class="nav-item" role="presentation">
 		<button class="nav-link active" id="customer-transactions-tab" data-bs-toggle="tab" data-bs-target="#customer-transactions-pane" type="button" role="tab" aria-controls="customer-transactions-pane" aria-selected="true">Transactions</button>
 	</li>
@@ -1077,7 +1230,7 @@
 
 <div class="tab-content" id="cashpickupCustomerTabsContent">
 	<div class="tab-pane fade show active" id="customer-transactions-pane" role="tabpanel" aria-labelledby="customer-transactions-tab" tabindex="0">
-		<div class="card border-0 shadow-sm mb-3">
+		<div class="card border-0 shadow-sm mb-3 cashpickup-activity-filter">
 			<div class="card-body">
 				<form method="get" class="row g-3 align-items-end" id="cashpickupCustomerTxFilterForm">
 					<input type="hidden" name="customer_id" value="<?=esc((string)$customerId)?>">
@@ -1154,7 +1307,7 @@
 	</div>
 
 	<div class="tab-pane fade" id="customer-statement-pane" role="tabpanel" aria-labelledby="customer-statement-tab" tabindex="0">
-		<div class="card border-0 shadow-sm">
+		<div class="card border-0 shadow-sm cashpickup-statement-card">
 			<div class="card-header d-flex align-items-center justify-content-between">
 				<div>
 					<strong>Ledger Statement</strong>
@@ -1165,23 +1318,27 @@
 			<div class="card-body p-0">
 				<div class="small text-muted px-3 pt-3">Credit activity is shown separately and does not change the customer cash balance.</div>
 				<div class="table-responsive">
-					<table class="table table-striped align-middle mb-0">
+					<table class="table table-striped align-middle mb-0 cashpickup-statement-table">
 						<thead>
 							<tr>
 								<th>Transaction Date</th>
-								<th>Transaction ID</th>
-								<th>Activity</th>
-								<th>Description</th>
-								<th class="text-end">Received</th>
-								<th class="text-end">Payout</th>
-								<th class="text-end">Credit</th>
-								<th class="text-end">Repayment</th>
+								<th>Transaction ID / Reference</th>
+								<th>Activity / Description</th>
+								<th class="text-end d-md-none">Received</th>
+								<th class="text-end d-md-none">Payout</th>
+								<th class="text-end d-md-none">Credit</th>
+								<th class="text-end d-md-none">Repayment</th>
+								<th class="text-end d-none d-md-table-cell">Cash flow</th>
+								<th class="text-end d-none d-md-table-cell">Credit activity</th>
 								<th class="text-end">Accumulated Balance</th>
 							</tr>
 						</thead>
 						<tbody>
 							<?php if (empty($statementRows)): ?>
-								<tr><td colspan="9" class="text-center text-muted">No customer ledger statement rows found.</td></tr>
+								<tr>
+									<td class="text-center text-muted py-5 d-md-none" colspan="8">No customer ledger statement rows found.</td>
+									<td class="text-center text-muted py-5 d-none d-md-table-cell" colspan="6">No customer ledger statement rows found.</td>
+								</tr>
 							<?php else: ?>
 								<?php foreach ($statementRows as $statementRow): ?>
 									<?php
@@ -1192,16 +1349,21 @@
 										$statementTracking = trim((string)($statementRow->tracking_id ?? ''));
 										$statementBalance = (float)($statementRow->balance_amount ?? 0);
 										$statementType = ucwords(str_replace('_', ' ', (string)($statementRow->entry_type ?? '')));
+										$statementReceived = (float)($statementRow->received_amount ?? 0);
+										$statementPayout = (float)($statementRow->payout_amount ?? 0);
+										$statementCredit = (float)($statementRow->credit_amount ?? 0);
+										$statementRepayment = (float)($statementRow->credit_repayment_amount ?? 0);
 									?>
 									<tr>
-										<td><?=esc((string)get_date_time($statementRow->date_created ?? ''))?></td>
+										<td class="text-nowrap"><?=esc((string)get_date_time($statementRow->date_created ?? ''))?></td>
 										<td>
-											<div class="fw-semibold"><?=esc((string)($statementRow->id ?? ''))?></div>
+											<div class="fw-semibold">#<?=esc((string)($statementRow->id ?? ''))?></div>
 											<?php if ($statementTracking !== ''): ?>
-												<div class="small text-muted">Tracking: <?=esc($statementTracking)?></div>
+												<div class="small text-muted text-break">Ref: <?=esc($statementTracking)?></div>
 											<?php endif; ?>
 										</td>
-										<td>
+										<td class="cashpickup-statement-description">
+											<?php if($statementType !== ''): ?><span class="badge rounded-pill bg-primary-subtle text-primary-emphasis cashpickup-statement-type mb-1"><?=esc($statementType)?></span><?php endif; ?>
 											<div class="fw-semibold"><?=esc($statementDescription !== '' ? $statementDescription : '---')?></div>
 											<?php if ($statementPhone !== ''): ?>
 												<div class="small text-muted">Phone: <?=esc($statementPhone)?></div>
@@ -1213,11 +1375,25 @@
 												<div class="small text-muted">Method: <?=esc($statementMethod)?></div>
 											<?php endif; ?>
 										</td>
-										<td class="text-end"><?=number_format((float)($statementRow->received_amount ?? 0), 2)?></td>
-										<td class="text-end"><?=number_format((float)($statementRow->payout_amount ?? 0), 2)?></td>
-										<td class="text-end"><?=number_format((float)($statementRow->credit_amount ?? 0), 2)?></td>
-										<td class="text-end"><?=number_format((float)($statementRow->credit_repayment_amount ?? 0), 2)?></td>
-										<td class="text-end <?=($statementBalance < 0) ? 'text-danger fw-semibold' : ''?>"><?=number_format($statementBalance, 2)?></td>
+										<td class="text-end text-success text-nowrap d-md-none"><?=number_format($statementReceived, 2)?></td>
+										<td class="text-end text-danger text-nowrap d-md-none"><?=number_format($statementPayout, 2)?></td>
+										<td class="text-end text-nowrap d-md-none"><?=number_format($statementCredit, 2)?></td>
+										<td class="text-end text-nowrap d-md-none"><?=number_format($statementRepayment, 2)?></td>
+										<td class="text-end d-none d-md-table-cell">
+											<div class="cashpickup-statement-flow">
+												<?php if($statementReceived > 0): ?><div class="cashpickup-statement-flow-line text-success"><span><i class="fa-solid fa-arrow-down" aria-hidden="true"></i> Received</span><strong><?=number_format($statementReceived, 2)?></strong></div><?php endif; ?>
+												<?php if($statementPayout > 0): ?><div class="cashpickup-statement-flow-line text-danger"><span><i class="fa-solid fa-arrow-up" aria-hidden="true"></i> Payout</span><strong><?=number_format($statementPayout, 2)?></strong></div><?php endif; ?>
+												<?php if($statementReceived <= 0 && $statementPayout <= 0): ?><span class="text-body-secondary">—</span><?php endif; ?>
+											</div>
+										</td>
+										<td class="text-end d-none d-md-table-cell">
+											<div class="cashpickup-statement-flow">
+												<?php if($statementCredit > 0): ?><div class="cashpickup-statement-flow-line text-primary"><span><i class="fa-solid fa-circle-plus" aria-hidden="true"></i> Credit</span><strong><?=number_format($statementCredit, 2)?></strong></div><?php endif; ?>
+												<?php if($statementRepayment > 0): ?><div class="cashpickup-statement-flow-line text-success"><span><i class="fa-solid fa-rotate-left" aria-hidden="true"></i> Repayment</span><strong><?=number_format($statementRepayment, 2)?></strong></div><?php endif; ?>
+												<?php if($statementCredit <= 0 && $statementRepayment <= 0): ?><span class="text-body-secondary">—</span><?php endif; ?>
+											</div>
+										</td>
+										<td class="text-end cashpickup-statement-balance <?=($statementBalance < 0) ? 'text-danger' : ''?>"><?=number_format($statementBalance, 2)?></td>
 									</tr>
 								<?php endforeach; ?>
 							<?php endif; ?>
