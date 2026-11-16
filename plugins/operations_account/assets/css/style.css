@@ -472,3 +472,1223 @@ body{
 		min-width:0 !important;
 	}
 }
+
+/* Cashdrawer and performance dashboard finish */
+.ops-dashboard-shell{
+	background:linear-gradient(145deg,#fff 0%,#f7f9fc 58%,#fffdf7 100%);
+	border:1px solid #e1e7f0;
+	border-radius:1.35rem;
+	box-shadow:0 18px 48px rgba(23,37,61,.13),0 2px 8px rgba(23,37,61,.05);
+}
+
+.ops-dashboard-shell::before{
+	background:
+		radial-gradient(circle at 0% 0%,rgba(96,165,250,.11) 0,transparent 54%),
+		radial-gradient(circle at 100% 100%,rgba(250,204,21,.09) 0,transparent 52%);
+	opacity:.85;
+	filter:blur(8px);
+}
+
+.ops-dashboard-tabs{
+	border-bottom:1px solid #e4e9f1;
+	gap:.35rem;
+}
+
+.ops-dashboard-tabs .nav-link{
+	border-radius:.75rem .75rem 0 0;
+	color:#67748a !important;
+	letter-spacing:.07em;
+	transition:color .18s ease,background-color .18s ease;
+}
+
+.ops-dashboard-tabs .nav-link:hover{
+	color:#26344a !important;
+	background:rgba(226,232,240,.55) !important;
+}
+
+.ops-dashboard-tabs .nav-link.active{
+	color:#936a00 !important;
+	background:linear-gradient(180deg,rgba(255,249,230,.9),rgba(255,255,255,.72)) !important;
+}
+
+.ops-dashboard-tabs .nav-link.active::after{
+	background:linear-gradient(90deg,#d9a316,#f4c84a);
+}
+
+.ops-tab-content{
+	padding-top:1.5rem;
+}
+
+.ops-dashboard-shell .ops-section-heading{
+	padding:.15rem .1rem .85rem;
+	margin-bottom:1.1rem;
+	border-bottom:1px solid #e8edf4;
+}
+
+.ops-dashboard-shell .ops-section-title{
+	color:#8c99ad;
+	font-size:.72rem;
+	letter-spacing:.16em;
+	font-weight:700;
+}
+
+.ops-dashboard-shell .ops-section-title span{
+	color:#24334a;
+}
+
+#cashdrawer .ops-kpi-grid{
+	grid-template-columns:repeat(4,minmax(0,1fr));
+	gap:.85rem;
+}
+
+#cashdrawer .ops-kpi-card,
+#performance .ops-kpi-card{
+	background:linear-gradient(145deg,#fff,#f8fafc);
+	border:1px solid #e4eaf2;
+	border-radius:1rem;
+	box-shadow:0 7px 20px rgba(25,42,66,.07),0 1px 3px rgba(25,42,66,.04);
+	backdrop-filter:none;
+	-webkit-backdrop-filter:none;
+	color:#24334a;
+	transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease;
+}
+
+#cashdrawer .ops-kpi-card:hover,
+#performance .ops-kpi-card:hover{
+	transform:translateY(-3px);
+	border-color:#d5deeb;
+	box-shadow:0 13px 28px rgba(25,42,66,.11),0 2px 5px rgba(25,42,66,.04);
+}
+
+#cashdrawer .ops-kpi-card{
+	min-height:108px;
+	padding:1rem 1.05rem;
+}
+
+#cashdrawer .ops-kpi-card--ghs{
+	background:linear-gradient(145deg,#fff,#f0fbf6);
+	border-color:#cfeee0;
+}
+
+#cashdrawer .ops-kpi-card--cfa{
+	background:linear-gradient(145deg,#fff,#fff9e9);
+	border-color:#f1e4b7;
+}
+
+#cashdrawer .ops-kpi-card--evd{
+	background:linear-gradient(145deg,#fff,#f7f3ff);
+	border-color:#e4d8ff;
+}
+
+#cashdrawer .ops-kpi-card--ecash{
+	background:linear-gradient(145deg,#fff,#eff9ff);
+	border-color:#cfeaf7;
+}
+
+#cashdrawer .ops-kpi-card--bank{
+	background:linear-gradient(145deg,#fff,#fff5ee);
+	border-color:#f3ddca;
+}
+
+#cashdrawer .ops-kpi-card--ghs .ops-kpi-icon{color:#16845e}
+#cashdrawer .ops-kpi-card--cfa .ops-kpi-icon{color:#a67a08}
+#cashdrawer .ops-kpi-card--evd .ops-kpi-icon{color:#7854c7}
+#cashdrawer .ops-kpi-card--ecash .ops-kpi-icon{color:#1385b7}
+#cashdrawer .ops-kpi-card--bank .ops-kpi-icon{color:#c46b2d}
+
+#cashdrawer .ops-kpi-icon,
+#performance .ops-kpi-icon{
+	opacity:.72;
+	font-size:1.05rem;
+}
+
+#cashdrawer .ops-kpi-label,
+#performance .ops-kpi-label{
+	color:#77849a;
+	font-size:.68rem;
+	letter-spacing:.13em;
+	font-weight:800;
+}
+
+#cashdrawer .ops-kpi-value,
+#performance .ops-kpi-value{
+	color:#24334a;
+	font-size:clamp(1.05rem,1.7vw,1.35rem);
+	font-weight:750;
+	font-variant-numeric:tabular-nums;
+	letter-spacing:-.035em;
+	line-height:1.3;
+	overflow-wrap:anywhere;
+}
+
+#cashdrawer .ops-kpi-sub,
+#performance .ops-kpi-sub{
+	color:#8792a4;
+	font-size:.72rem;
+	line-height:1.4;
+}
+
+#opsCashdrawersRegion .ops-cashdrawer-toolbar{
+	padding:.9rem;
+	background:linear-gradient(135deg,#f8fafc,#f4f7fb);
+	border:1px solid #e7ecf3;
+	border-radius:.95rem;
+}
+
+#opsCashdrawersRegion .form-label{
+	color:#64748b !important;
+	font-weight:700;
+	font-size:.72rem;
+	letter-spacing:.035em;
+}
+
+#opsCashdrawersRegion .form-control,
+#opsCashdrawersRegion .form-select,
+#opsCashdrawersRegion .select2-container--default .select2-selection--multiple{
+	min-height:38px;
+	border:1px solid #dce3ed !important;
+	border-radius:.65rem !important;
+	background-color:#fff !important;
+	color:#29384f !important;
+	box-shadow:0 1px 2px rgba(20,35,55,.03);
+}
+
+#opsCashdrawersRegion .form-control:focus,
+#opsCashdrawersRegion .form-select:focus{
+	border-color:#a8bedb !important;
+	box-shadow:0 0 0 .2rem rgba(72,119,178,.12);
+}
+
+#opsCashdrawersRegion .select2-container--default .select2-selection--multiple .select2-search__field,
+#opsCashdrawersRegion .select2-container--default .select2-selection__choice__remove{
+	color:#42536c !important;
+}
+
+#opsCashdrawersRegion .select2-container--default .select2-selection--multiple .select2-selection__choice{
+	background:#edf3fa !important;
+	border:1px solid #d9e3ef !important;
+	border-radius:.45rem;
+	color:#42536c !important;
+}
+
+#opsCashdrawersRegion .select2-dropdown,
+#opsCashdrawersRegion .select2-container--default .select2-results__option,
+#opsCashdrawersRegion .select2-container--default .select2-search--dropdown .select2-search__field{
+	background:#fff !important;
+	color:#29384f !important;
+	border-color:#dce3ed !important;
+}
+
+#opsCashdrawersRegion .select2-container--default .select2-results__option--highlighted[aria-selected],
+#opsCashdrawersRegion .select2-container--default .select2-results__option--highlighted{
+	background:#edf3fa !important;
+	color:#24334a !important;
+}
+
+#opsCashdrawersRegion .ops-cashdrawer-actions .btn-warning{
+	min-height:38px;
+	padding:.5rem .85rem;
+	border:0;
+	border-radius:.65rem;
+	background:linear-gradient(135deg,#f6c94a,#e5aa1a);
+	box-shadow:0 5px 12px rgba(210,157,25,.2);
+	color:#382b08;
+	font-weight:700;
+	transition:transform .18s ease,box-shadow .18s ease;
+}
+
+#opsCashdrawersRegion .ops-cashdrawer-actions .btn-warning:hover{
+	transform:translateY(-1px);
+	box-shadow:0 8px 16px rgba(210,157,25,.26);
+}
+
+#opsCashdrawersRegion .ops-cashdrawer-table-wrap{
+	overflow:hidden;
+	border:1px solid #e5eaf1;
+	border-radius:.95rem;
+	background:#fff;
+	box-shadow:0 5px 18px rgba(25,42,66,.045);
+}
+
+#opsCashdrawersRegion .ops-cashdrawer-table{
+	margin-bottom:0;
+	color:#34445c;
+}
+
+#opsCashdrawersRegion .ops-cashdrawer-table thead th{
+	padding:.8rem .75rem;
+	background:#f2f5f9 !important;
+	color:#617087 !important;
+	border-bottom:1px solid #e2e8f0;
+	font-size:.69rem;
+	font-weight:800;
+	letter-spacing:.1em;
+	text-transform:uppercase;
+}
+
+#opsCashdrawersRegion .ops-cashdrawer-table tbody td{
+	padding:.8rem .75rem;
+	border-color:#edf0f5;
+	vertical-align:middle;
+}
+
+#opsCashdrawersRegion .ops-cashdrawer-table tbody tr{
+	transition:background-color .16s ease;
+}
+
+#opsCashdrawersRegion .ops-cashdrawer-table tbody tr:hover{
+	background:#f8fbff;
+}
+
+#opsCashdrawersRegion .ops-cashdrawer-table tbody td:nth-child(2) a{
+	color:#2865b0 !important;
+	font-weight:700;
+}
+
+#opsCashdrawersRegion .ops-cashdrawer-table tfoot th{
+	padding:.75rem;
+	background:#f7f9fc !important;
+	color:#53627a !important;
+	border-top:1px solid #e3e9f1;
+	font-size:.75rem;
+}
+
+#opsCashdrawersRegion .dropdown-menu{
+	padding:.4rem;
+	border:1px solid #e4eaf2;
+	border-radius:.75rem;
+	box-shadow:0 12px 30px rgba(22,36,56,.14);
+}
+
+#opsCashdrawersRegion .dropdown-item{
+	border-radius:.45rem;
+	color:#34445c;
+	font-size:.84rem;
+}
+
+#opsCashdrawersRegion .dropdown-item:hover{
+	background:#f2f6fb;
+}
+
+#performance .ops-section-heading{
+	align-items:center;
+	gap:1rem;
+}
+
+#performance .ops-period-caption{
+	color:#7d899b !important;
+	line-height:1.5;
+}
+
+#performance .ops-period-btn{
+	min-height:36px;
+	padding:.45rem .75rem;
+	border-color:#dce3ed !important;
+	background:#fff;
+	color:#64748b;
+	font-size:.76rem;
+	font-weight:650;
+	transition:background-color .18s ease,color .18s ease,border-color .18s ease;
+}
+
+#performance .ops-period-btn:first-child{border-radius:.65rem 0 0 .65rem}
+#performance .ops-period-btn:last-child{border-radius:0 .65rem .65rem 0}
+
+#performance .ops-period-btn.active,
+#performance .ops-period-btn:hover{
+	background:#24334a !important;
+	background-image:none !important;
+	border-color:#24334a !important;
+	color:#fff !important;
+}
+
+#performance .ops-kpi-grid{
+	grid-template-columns:repeat(4,minmax(0,1fr));
+	gap:.8rem;
+}
+
+#performance #opsPerformanceKpis .ops-kpi-card{
+	min-height:114px;
+	padding:1rem .95rem;
+}
+
+#performance #opsPerformanceKpis .ops-kpi-card:nth-child(1){border-top:3px solid #3ca77b}
+#performance #opsPerformanceKpis .ops-kpi-card:nth-child(2){border-top:3px solid #5b8dcc}
+#performance #opsPerformanceKpis .ops-kpi-card:nth-child(3){border-top:3px solid #8a71c7}
+#performance #opsPerformanceKpis .ops-kpi-card:nth-child(4){border-top:3px solid #d4a52e}
+#performance #opsPerformanceKpis .ops-kpi-card:nth-child(1) .ops-kpi-icon{color:#27885f}
+#performance #opsPerformanceKpis .ops-kpi-card:nth-child(2) .ops-kpi-icon{color:#477bb9}
+#performance #opsPerformanceKpis .ops-kpi-card:nth-child(3) .ops-kpi-icon{color:#785db7}
+#performance #opsPerformanceKpis .ops-kpi-card:nth-child(4) .ops-kpi-icon{color:#a67b10}
+
+#performance .ops-kpi-card[style*="min-height"]{
+	min-height:190px;
+	padding:1.15rem;
+}
+
+#performance .ops-bar-track{
+	height:.55rem;
+	background:#e9eef5;
+}
+
+#performance .ops-bar-fill{
+	border-radius:999px;
+	background-image:linear-gradient(90deg,#37a879,#70c89e,#f1c956) !important;
+}
+
+#performance .ops-kpi-card ul{
+	color:#596980;
+	line-height:1.65;
+}
+
+#performance .ops-kpi-card .table-dark{
+	--bs-table-bg:transparent;
+	--bs-table-color:#40516a;
+	--bs-table-striped-bg:#f7f9fc;
+	--bs-table-striped-color:#40516a;
+	--bs-table-border-color:#e8edf3;
+	border-color:#e8edf3;
+}
+
+#performance .ops-kpi-card .table-dark thead th{
+	position:sticky;
+	top:0;
+	background:#f2f5f9;
+	color:#738198;
+	border-bottom:1px solid #e3e9f1;
+}
+
+#performance #opsServiceProgress,
+#performance #opsPerfSummary{
+	color:#66758b;
+}
+
+.ops-drill-panel{
+	background:radial-gradient(circle at top left,rgba(91,141,204,.14) 0,#fff 58%);
+	border-left:1px solid #e1e7f0;
+	box-shadow:-18px 0 40px rgba(26,42,65,.2);
+	color:#28384f;
+}
+
+.ops-drill-close{
+	background:#f1f4f8;
+	color:#485a73;
+	transition:background-color .18s ease,color .18s ease;
+}
+
+.ops-drill-close:hover{
+	background:#e2eaf4;
+	color:#23334a;
+}
+
+@media (max-width: 767.98px){
+	#performance .ops-kpi-grid{
+		grid-template-columns:repeat(2,minmax(0,1fr));
+	}
+}
+
+@media (max-width: 767.98px){
+	#cashdrawer .ops-kpi-grid{
+		grid-template-columns:repeat(2,minmax(0,1fr));
+	}
+}
+
+@media (max-width: 575.98px){
+	.ops-dashboard-shell{
+		padding:.85rem .65rem 1.1rem;
+		border-radius:1rem;
+	}
+
+	.ops-tab-content{
+		padding-top:1.1rem;
+	}
+
+	.ops-dashboard-tabs{
+		overflow-x:auto;
+		flex-wrap:nowrap;
+	}
+
+	.ops-dashboard-tabs .nav-link{
+		white-space:nowrap;
+		padding:.65rem .7rem;
+	}
+
+	#cashdrawer .ops-kpi-grid,
+	#performance .ops-kpi-grid{
+		grid-template-columns:repeat(2,minmax(0,1fr));
+		gap:.6rem;
+	}
+
+	#cashdrawer .ops-kpi-card,
+	#performance #opsPerformanceKpis .ops-kpi-card{
+		padding:.85rem .75rem;
+	}
+
+	#performance .ops-section-heading{
+		align-items:stretch;
+		flex-direction:column;
+	}
+
+	#performance .ops-section-heading .btn-group{
+		display:grid;
+		grid-template-columns:repeat(2,minmax(0,1fr));
+	}
+
+	#performance .ops-period-btn:first-child,
+	#performance .ops-period-btn:last-child{
+		border-radius:.55rem;
+	}
+}
+
+@media (prefers-reduced-motion: reduce){
+	#cashdrawer .ops-kpi-card,
+	#performance .ops-kpi-card,
+	#opsCashdrawersRegion .ops-cashdrawer-actions .btn-warning,
+	#opsCashdrawersRegion .ops-cashdrawer-table tbody tr{
+		transition:none;
+	}
+}
+
+html[data-bs-theme="dark"] .ops-dashboard-shell,
+.dark-theme .ops-dashboard-shell{
+	background:linear-gradient(145deg,#151d2a 0%,#1b2432 58%,#24251f 100%);
+	border-color:#303b4e;
+	box-shadow:0 18px 48px rgba(0,0,0,.38),0 2px 8px rgba(0,0,0,.24);
+	color:#e1e7f0;
+}
+
+html[data-bs-theme="dark"] .ops-dashboard-shell::before,
+.dark-theme .ops-dashboard-shell::before{
+	background:
+		radial-gradient(circle at 0% 0%,rgba(59,130,246,.13) 0,transparent 54%),
+		radial-gradient(circle at 100% 100%,rgba(245,190,57,.08) 0,transparent 52%);
+	opacity:.8;
+}
+
+html[data-bs-theme="dark"] .ops-dashboard-tabs,
+.dark-theme .ops-dashboard-tabs{
+	border-bottom-color:#344054;
+}
+
+html[data-bs-theme="dark"] .ops-dashboard-tabs .nav-link,
+.dark-theme .ops-dashboard-tabs .nav-link{
+	color:#aeb9ca !important;
+}
+
+html[data-bs-theme="dark"] .ops-dashboard-tabs .nav-link:hover,
+.dark-theme .ops-dashboard-tabs .nav-link:hover{
+	background:rgba(255,255,255,.055) !important;
+	color:#f0f4fa !important;
+}
+
+html[data-bs-theme="dark"] #profileTabs .nav-link.active,
+.dark-theme #profileTabs .nav-link.active{
+	background:linear-gradient(180deg,rgba(245,190,57,.13),rgba(245,190,57,.045)) !important;
+	background-image:linear-gradient(180deg,rgba(245,190,57,.13),rgba(245,190,57,.045)) !important;
+	border-color:#39465a !important;
+	color:#f4d276 !important;
+}
+
+html[data-bs-theme="dark"] .ops-dashboard-tabs .nav-link.active::after,
+.dark-theme .ops-dashboard-tabs .nav-link.active::after{
+	background:linear-gradient(90deg,#d7a82e,#f4d276);
+}
+
+html[data-bs-theme="dark"] .ops-dashboard-shell .ops-section-heading,
+.dark-theme .ops-dashboard-shell .ops-section-heading{
+	border-bottom-color:#303b4c;
+}
+
+html[data-bs-theme="dark"] .ops-dashboard-shell .ops-section-title,
+.dark-theme .ops-dashboard-shell .ops-section-title{
+	color:#91a0b5;
+}
+
+html[data-bs-theme="dark"] .ops-dashboard-shell .ops-section-title span,
+.dark-theme .ops-dashboard-shell .ops-section-title span{
+	color:#e6ecf5;
+}
+
+html[data-bs-theme="dark"] #cashdrawer .ops-kpi-card,
+html[data-bs-theme="dark"] #performance .ops-kpi-card,
+.dark-theme #cashdrawer .ops-kpi-card,
+.dark-theme #performance .ops-kpi-card{
+	background:linear-gradient(145deg,#202a39,#1b2431);
+	border-color:#354154;
+	box-shadow:0 8px 22px rgba(0,0,0,.2),0 1px 3px rgba(0,0,0,.16);
+	color:#e0e7f1;
+}
+
+html[data-bs-theme="dark"] #cashdrawer .ops-kpi-card--ghs,
+.dark-theme #cashdrawer .ops-kpi-card--ghs{
+	background:linear-gradient(145deg,#1d342f,#1b292b);
+	border-color:#31574a;
+}
+
+html[data-bs-theme="dark"] #cashdrawer .ops-kpi-card--cfa,
+.dark-theme #cashdrawer .ops-kpi-card--cfa{
+	background:linear-gradient(145deg,#342f20,#29271f);
+	border-color:#5a4d2e;
+}
+
+html[data-bs-theme="dark"] #cashdrawer .ops-kpi-card--evd,
+.dark-theme #cashdrawer .ops-kpi-card--evd{
+	background:linear-gradient(145deg,#2c2740,#242336);
+	border-color:#4a3e68;
+}
+
+html[data-bs-theme="dark"] #cashdrawer .ops-kpi-card--ecash,
+.dark-theme #cashdrawer .ops-kpi-card--ecash{
+	background:linear-gradient(145deg,#1d303e,#1c2834);
+	border-color:#315064;
+}
+
+html[data-bs-theme="dark"] #cashdrawer .ops-kpi-card--bank,
+.dark-theme #cashdrawer .ops-kpi-card--bank{
+	background:linear-gradient(145deg,#36291f,#2b2521);
+	border-color:#604630;
+}
+
+html[data-bs-theme="dark"] #cashdrawer .ops-kpi-card:hover,
+html[data-bs-theme="dark"] #performance .ops-kpi-card:hover,
+.dark-theme #cashdrawer .ops-kpi-card:hover,
+.dark-theme #performance .ops-kpi-card:hover{
+	border-color:#53627a;
+	box-shadow:0 13px 28px rgba(0,0,0,.3),0 2px 5px rgba(0,0,0,.2);
+}
+
+html[data-bs-theme="dark"] #cashdrawer .ops-kpi-label,
+html[data-bs-theme="dark"] #performance .ops-kpi-label,
+.dark-theme #cashdrawer .ops-kpi-label,
+.dark-theme #performance .ops-kpi-label{
+	color:#a8b4c6;
+}
+
+html[data-bs-theme="dark"] #cashdrawer .ops-kpi-value,
+html[data-bs-theme="dark"] #performance .ops-kpi-value,
+.dark-theme #cashdrawer .ops-kpi-value,
+.dark-theme #performance .ops-kpi-value{
+	color:#f0f4fa;
+}
+
+html[data-bs-theme="dark"] #cashdrawer .ops-kpi-sub,
+html[data-bs-theme="dark"] #performance .ops-kpi-sub,
+.dark-theme #cashdrawer .ops-kpi-sub,
+.dark-theme #performance .ops-kpi-sub{
+	color:#a3afc1;
+}
+
+html[data-bs-theme="dark"] #performance #opsPerformanceKpis .ops-kpi-card:nth-child(1) .ops-kpi-icon,
+html[data-bs-theme="dark"] #cashdrawer .ops-kpi-card--ghs .ops-kpi-icon,
+.dark-theme #performance #opsPerformanceKpis .ops-kpi-card:nth-child(1) .ops-kpi-icon,
+.dark-theme #cashdrawer .ops-kpi-card--ghs .ops-kpi-icon{color:#69d2a2}
+
+html[data-bs-theme="dark"] #performance #opsPerformanceKpis .ops-kpi-card:nth-child(2) .ops-kpi-icon,
+html[data-bs-theme="dark"] #cashdrawer .ops-kpi-card--ecash .ops-kpi-icon,
+.dark-theme #performance #opsPerformanceKpis .ops-kpi-card:nth-child(2) .ops-kpi-icon,
+.dark-theme #cashdrawer .ops-kpi-card--ecash .ops-kpi-icon{color:#7dc4f4}
+
+html[data-bs-theme="dark"] #performance #opsPerformanceKpis .ops-kpi-card:nth-child(3) .ops-kpi-icon,
+html[data-bs-theme="dark"] #cashdrawer .ops-kpi-card--evd .ops-kpi-icon,
+.dark-theme #performance #opsPerformanceKpis .ops-kpi-card:nth-child(3) .ops-kpi-icon,
+.dark-theme #cashdrawer .ops-kpi-card--evd .ops-kpi-icon{color:#b9a2ff}
+
+html[data-bs-theme="dark"] #performance #opsPerformanceKpis .ops-kpi-card:nth-child(4) .ops-kpi-icon,
+html[data-bs-theme="dark"] #cashdrawer .ops-kpi-card--cfa .ops-kpi-icon,
+html[data-bs-theme="dark"] #cashdrawer .ops-kpi-card--bank .ops-kpi-icon,
+.dark-theme #performance #opsPerformanceKpis .ops-kpi-card:nth-child(4) .ops-kpi-icon,
+.dark-theme #cashdrawer .ops-kpi-card--cfa .ops-kpi-icon,
+.dark-theme #cashdrawer .ops-kpi-card--bank .ops-kpi-icon{color:#f2ca65}
+
+html[data-bs-theme="dark"] #opsCashdrawersRegion .ops-cashdrawer-toolbar,
+.dark-theme #opsCashdrawersRegion .ops-cashdrawer-toolbar{
+	background:linear-gradient(135deg,#1b2533,#202a39);
+	border-color:#354154;
+}
+
+html[data-bs-theme="dark"] #opsCashdrawersRegion .form-label,
+.dark-theme #opsCashdrawersRegion .form-label{
+	color:#aab6c8 !important;
+}
+
+html[data-bs-theme="dark"] #opsCashdrawersRegion .form-control,
+html[data-bs-theme="dark"] #opsCashdrawersRegion .form-select,
+html[data-bs-theme="dark"] #opsCashdrawersRegion .select2-container--default .select2-selection--multiple,
+.dark-theme #opsCashdrawersRegion .form-control,
+.dark-theme #opsCashdrawersRegion .form-select,
+.dark-theme #opsCashdrawersRegion .select2-container--default .select2-selection--multiple{
+	background-color:#151e2b !important;
+	border-color:#3a4659 !important;
+	color:#e2e8f0 !important;
+	color-scheme:dark;
+}
+
+html[data-bs-theme="dark"] #opsCashdrawersRegion .form-control:focus,
+html[data-bs-theme="dark"] #opsCashdrawersRegion .form-select:focus,
+.dark-theme #opsCashdrawersRegion .form-control:focus,
+.dark-theme #opsCashdrawersRegion .form-select:focus{
+	border-color:#7188a8 !important;
+	box-shadow:0 0 0 .2rem rgba(110,145,190,.18);
+}
+
+html[data-bs-theme="dark"] #opsCashdrawersRegion .select2-container--default .select2-selection--multiple .select2-search__field,
+html[data-bs-theme="dark"] #opsCashdrawersRegion .select2-container--default .select2-selection__choice__remove,
+.dark-theme #opsCashdrawersRegion .select2-container--default .select2-selection--multiple .select2-search__field,
+.dark-theme #opsCashdrawersRegion .select2-container--default .select2-selection__choice__remove{
+	color:#e2e8f0 !important;
+}
+
+html[data-bs-theme="dark"] #opsCashdrawersRegion .select2-container--default .select2-selection--multiple .select2-selection__choice,
+.dark-theme #opsCashdrawersRegion .select2-container--default .select2-selection--multiple .select2-selection__choice{
+	background:#2a3545 !important;
+	border-color:#46546a !important;
+	color:#e2e8f0 !important;
+}
+
+html[data-bs-theme="dark"] #opsCashdrawersRegion .select2-dropdown,
+html[data-bs-theme="dark"] #opsCashdrawersRegion .select2-container--default .select2-results__option,
+html[data-bs-theme="dark"] #opsCashdrawersRegion .select2-container--default .select2-search--dropdown .select2-search__field,
+.dark-theme #opsCashdrawersRegion .select2-dropdown,
+.dark-theme #opsCashdrawersRegion .select2-container--default .select2-results__option,
+.dark-theme #opsCashdrawersRegion .select2-container--default .select2-search--dropdown .select2-search__field{
+	background:#151e2b !important;
+	border-color:#3a4659 !important;
+	color:#e2e8f0 !important;
+}
+
+html[data-bs-theme="dark"] #opsCashdrawersRegion .select2-container--default .select2-results__option--highlighted[aria-selected],
+html[data-bs-theme="dark"] #opsCashdrawersRegion .select2-container--default .select2-results__option--highlighted,
+.dark-theme #opsCashdrawersRegion .select2-container--default .select2-results__option--highlighted[aria-selected],
+.dark-theme #opsCashdrawersRegion .select2-container--default .select2-results__option--highlighted{
+	background:#2a3545 !important;
+	color:#fff !important;
+}
+
+html[data-bs-theme="dark"] #opsCashdrawersRegion .ops-cashdrawer-table-wrap,
+.dark-theme #opsCashdrawersRegion .ops-cashdrawer-table-wrap{
+	background:#192230;
+	border-color:#344054;
+	box-shadow:0 5px 18px rgba(0,0,0,.14);
+}
+
+html[data-bs-theme="dark"] #opsCashdrawersRegion .ops-cashdrawer-table,
+.dark-theme #opsCashdrawersRegion .ops-cashdrawer-table{
+	--bs-table-color:#dbe3ee;
+	--bs-table-bg:transparent;
+	--bs-table-striped-bg:#202b3a;
+	--bs-table-striped-color:#dbe3ee;
+	--bs-table-hover-bg:#273548;
+	--bs-table-hover-color:#f2f5fa;
+	--bs-table-border-color:#303c4e;
+	color:#dbe3ee;
+}
+
+html[data-bs-theme="dark"] #opsCashdrawersRegion .ops-cashdrawer-table thead th,
+html[data-bs-theme="dark"] #opsCashdrawersRegion .ops-cashdrawer-table tfoot th,
+.dark-theme #opsCashdrawersRegion .ops-cashdrawer-table thead th,
+.dark-theme #opsCashdrawersRegion .ops-cashdrawer-table tfoot th{
+	background:#222d3c !important;
+	border-color:#344054;
+	color:#c1cada !important;
+}
+
+html[data-bs-theme="dark"] #opsCashdrawersRegion .ops-cashdrawer-table tbody td,
+.dark-theme #opsCashdrawersRegion .ops-cashdrawer-table tbody td{
+	border-color:#303c4e;
+}
+
+html[data-bs-theme="dark"] #opsCashdrawersRegion .ops-cashdrawer-table tbody tr:hover,
+.dark-theme #opsCashdrawersRegion .ops-cashdrawer-table tbody tr:hover{
+	background:#273548;
+}
+
+html[data-bs-theme="dark"] #opsCashdrawersRegion .ops-cashdrawer-table tbody td:nth-child(2) a,
+.dark-theme #opsCashdrawersRegion .ops-cashdrawer-table tbody td:nth-child(2) a{
+	color:#82b8ff !important;
+}
+
+html[data-bs-theme="dark"] #opsCashdrawersRegion .dropdown-menu,
+.dark-theme #opsCashdrawersRegion .dropdown-menu{
+	background:#1c2634;
+	border-color:#354154;
+}
+
+html[data-bs-theme="dark"] #opsCashdrawersRegion .dropdown-item,
+.dark-theme #opsCashdrawersRegion .dropdown-item{
+	color:#d8e0ec;
+}
+
+html[data-bs-theme="dark"] #opsCashdrawersRegion .dropdown-item:hover,
+.dark-theme #opsCashdrawersRegion .dropdown-item:hover{
+	background:#2a3545;
+}
+
+html[data-bs-theme="dark"] #performance .ops-period-caption,
+.dark-theme #performance .ops-period-caption{
+	color:#a4b0c1 !important;
+}
+
+html[data-bs-theme="dark"] #performance .ops-period-btn,
+.dark-theme #performance .ops-period-btn{
+	background:#202a39;
+	border-color:#3b485b !important;
+	color:#c0cada;
+}
+
+html[data-bs-theme="dark"] #performance .ops-period-btn.active,
+html[data-bs-theme="dark"] #performance .ops-period-btn:hover,
+.dark-theme #performance .ops-period-btn.active,
+.dark-theme #performance .ops-period-btn:hover{
+	background:#efc24e !important;
+	background-image:none !important;
+	border-color:#efc24e !important;
+	color:#202a39 !important;
+}
+
+html[data-bs-theme="dark"] #performance .ops-bar-track,
+.dark-theme #performance .ops-bar-track{
+	background:#303b4b;
+}
+
+html[data-bs-theme="dark"] #performance .ops-kpi-card ul,
+.dark-theme #performance .ops-kpi-card ul{
+	color:#c0cada;
+}
+
+html[data-bs-theme="dark"] #performance .ops-kpi-card .table-dark,
+.dark-theme #performance .ops-kpi-card .table-dark{
+	--bs-table-color:#d5deea;
+	--bs-table-striped-bg:#232e3d;
+	--bs-table-striped-color:#d5deea;
+	--bs-table-border-color:#354154;
+}
+
+html[data-bs-theme="dark"] #performance .ops-kpi-card .table-dark thead th,
+.dark-theme #performance .ops-kpi-card .table-dark thead th{
+	background:#263243;
+	border-color:#354154;
+	color:#b8c4d5;
+}
+
+html[data-bs-theme="dark"] #performance #opsServiceProgress,
+html[data-bs-theme="dark"] #performance #opsPerfSummary,
+.dark-theme #performance #opsServiceProgress,
+.dark-theme #performance #opsPerfSummary{
+	color:#c0cada;
+}
+
+html[data-bs-theme="dark"] .ops-drill-panel,
+.dark-theme .ops-drill-panel{
+	background:radial-gradient(circle at top left,rgba(59,130,246,.16) 0,#171f2c 58%);
+	border-left-color:#354154;
+	box-shadow:-18px 0 40px rgba(0,0,0,.38);
+	color:#e0e7f1;
+}
+
+html[data-bs-theme="dark"] .ops-drill-close,
+.dark-theme .ops-drill-close{
+	background:#2a3545;
+	color:#e0e7f1;
+}
+
+html[data-bs-theme="dark"] .ops-drill-close:hover,
+.dark-theme .ops-drill-close:hover{
+	background:#39475b;
+	color:#fff;
+}
+
+#sims .ops-kpi-grid{
+	grid-template-columns:repeat(4,minmax(0,1fr));
+	gap:.85rem;
+}
+
+#sims .ops-kpi-card{
+	min-height:108px;
+	padding:1rem 1.05rem;
+	background:linear-gradient(145deg,#fff,#f8fafc);
+	border:1px solid #e4eaf2;
+	border-top:3px solid #5b8dcc;
+	border-radius:1rem;
+	box-shadow:0 7px 20px rgba(25,42,66,.07),0 1px 3px rgba(25,42,66,.04);
+	color:#24334a;
+	transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease;
+}
+
+#sims .ops-kpi-card:nth-child(1){border-top-color:#4c91d4}
+#sims .ops-kpi-card:nth-child(2){border-top-color:#3ca77b}
+#sims .ops-kpi-card:nth-child(3){border-top-color:#d3a02e}
+#sims .ops-kpi-card:nth-child(4){border-top-color:#8970c4}
+#sims .ops-kpi-card:nth-child(1) .ops-kpi-icon{color:#397fbd}
+#sims .ops-kpi-card:nth-child(2) .ops-kpi-icon{color:#27885f}
+#sims .ops-kpi-card:nth-child(3) .ops-kpi-icon{color:#a67b10}
+#sims .ops-kpi-card:nth-child(4) .ops-kpi-icon{color:#785db7}
+
+#sims .ops-kpi-card:hover{
+	transform:translateY(-3px);
+	border-color:#d5deeb;
+	box-shadow:0 13px 28px rgba(25,42,66,.11),0 2px 5px rgba(25,42,66,.04);
+}
+
+#sims .ops-kpi-label{
+	color:#77849a;
+	font-size:.68rem;
+	letter-spacing:.13em;
+	font-weight:800;
+}
+
+#sims .ops-kpi-value{
+	color:#24334a;
+	font-size:clamp(1.05rem,1.7vw,1.35rem);
+	font-weight:750;
+	font-variant-numeric:tabular-nums;
+	letter-spacing:-.035em;
+	line-height:1.3;
+}
+
+#sims .ops-kpi-sub{
+	color:#8792a4;
+	font-size:.72rem;
+	line-height:1.4;
+}
+
+#sims .ops-kpi-trend{
+	font-size:.72rem;
+	font-weight:650;
+}
+
+#sims .ops-kpi-trend.positive{color:#21845b}
+#sims .ops-kpi-trend.negative{color:#b46b22}
+
+#sims .ops-chip-row{
+	gap:.8rem;
+}
+
+#sims .ops-chip-row > .flex-fill{
+	padding:.7rem;
+	border:1px solid #e5eaf1;
+	border-radius:.9rem;
+	background:linear-gradient(145deg,#fff,#f8fafc);
+	box-shadow:0 5px 16px rgba(25,42,66,.045);
+}
+
+#sims .ops-chip{
+	min-height:34px;
+	padding:.35rem .65rem;
+	border:1px solid #e3eaf3;
+	border-radius:.6rem;
+	background:#f3f6fa;
+	color:#64748b;
+	font-size:.72rem;
+	font-weight:650;
+}
+
+#sims .ops-chip span{
+	color:#33445d;
+	font-weight:800;
+	letter-spacing:.04em;
+}
+
+#sims .ops-chip small{
+	color:#7d899b;
+}
+
+#sims .ops-bar-track{
+	height:.55rem;
+	margin-top:.6rem;
+	background:#e9eef5;
+}
+
+#sims .ops-bar-fill{
+	background-image:linear-gradient(90deg,#398fc5,#52b88a,#e7bd4c);
+}
+
+#sims #bulkAssignPanel{
+	margin-bottom:1.1rem;
+	padding:1rem 1.1rem;
+	border:1px solid #e3e9f1;
+	border-radius:1rem;
+	background:linear-gradient(135deg,#f8fafc,#f3f6fa);
+	box-shadow:0 6px 18px rgba(25,42,66,.05);
+	color:#34445c;
+}
+
+#sims #bulkAssignPanel > div:first-child > strong{
+	color:#29384f !important;
+	font-size:.9rem;
+}
+
+#sims #bulkAssignPanel .form-select,
+#opsSimsRegion .form-control,
+#opsSimsRegion .form-select{
+	min-height:38px;
+	border:1px solid #dce3ed;
+	border-radius:.65rem;
+	background-color:#fff;
+	color:#29384f;
+	box-shadow:0 1px 2px rgba(20,35,55,.03);
+}
+
+#opsSimsRegion .form-control:focus,
+#opsSimsRegion .form-select:focus{
+	border-color:#a8bedb;
+	box-shadow:0 0 0 .2rem rgba(72,119,178,.12);
+}
+
+#opsSimsRegion .ops-sims-toolbar{
+	margin-bottom:.75rem;
+	padding:.85rem;
+	border:1px solid #e7ecf3;
+	border-radius:.9rem;
+	background:linear-gradient(135deg,#f8fafc,#f4f7fb);
+}
+
+#opsSimsRegion .ops-sims-search{
+	max-width:360px !important;
+}
+
+#opsSimsRegion .table-responsive{
+	overflow-x:auto;
+	border:1px solid #e5eaf1;
+	border-radius:.95rem;
+	background:#fff;
+	box-shadow:0 5px 18px rgba(25,42,66,.045);
+}
+
+#opsSimsRegion table{
+	margin-bottom:0;
+	--bs-table-color:#34445c;
+	--bs-table-bg:transparent;
+	--bs-table-striped-bg:#f8fafc;
+	--bs-table-striped-color:#34445c;
+	--bs-table-hover-bg:#f1f6fc;
+	--bs-table-hover-color:#29384f;
+	--bs-table-border-color:#edf0f5;
+	color:#34445c;
+}
+
+#opsSimsRegion table thead th{
+	padding:.8rem .7rem;
+	background:#f2f5f9 !important;
+	border-color:#e2e8f0;
+	color:#617087 !important;
+	font-size:.68rem;
+	font-weight:800;
+	letter-spacing:.09em;
+	text-transform:uppercase;
+	white-space:nowrap;
+}
+
+#opsSimsRegion table tbody td{
+	padding:.75rem .7rem;
+	border-color:#edf0f5;
+	vertical-align:middle;
+}
+
+#opsSimsRegion table tbody tr{
+	transition:background-color .16s ease;
+}
+
+#opsSimsRegion table tbody tr:hover{
+	background:#f1f6fc;
+}
+
+#opsSimsRegion table tbody td a:not(.btn){
+	color:#2865b0 !important;
+	font-weight:650;
+}
+
+#opsSimsRegion .ops-sim-mobile-meta{
+	color:#748198;
+	font-size:.74rem;
+}
+
+#opsSimsRegion .pagination{
+	gap:.25rem;
+	margin:.85rem 0 0;
+}
+
+#opsSimsRegion .page-link{
+	min-width:34px;
+	border:1px solid #e1e7ef;
+	border-radius:.5rem;
+	color:#566780;
+	text-align:center;
+}
+
+#opsSimsRegion .page-item.active .page-link{
+	border-color:#345f91;
+	background:#345f91;
+	color:#fff;
+}
+
+#sims #openAssignModal,
+#sims #bulkAssignPanel .btn-warning{
+	border-radius:.6rem;
+	box-shadow:0 5px 12px rgba(210,157,25,.16);
+	font-weight:700;
+}
+
+#sims #bulkClearSelection{
+	border-radius:.6rem;
+}
+
+@media (max-width: 767.98px){
+	#sims .ops-kpi-grid{
+		grid-template-columns:repeat(2,minmax(0,1fr));
+	}
+
+	#sims .ops-chip-row > .flex-fill{
+		max-width:none !important;
+	}
+
+	#sims #bulkAssignPanel{
+		align-items:stretch !important;
+	}
+}
+
+html[data-bs-theme="dark"] #sims .ops-kpi-card,
+.dark-theme #sims .ops-kpi-card{
+	background:linear-gradient(145deg,#202a39,#1b2431);
+	border-color:#354154;
+	box-shadow:0 8px 22px rgba(0,0,0,.2),0 1px 3px rgba(0,0,0,.16);
+	color:#e0e7f1;
+}
+
+html[data-bs-theme="dark"] #sims .ops-kpi-card:nth-child(1){border-top-color:#65a9e3}
+html[data-bs-theme="dark"] #sims .ops-kpi-card:nth-child(2){border-top-color:#59c391}
+html[data-bs-theme="dark"] #sims .ops-kpi-card:nth-child(3){border-top-color:#edc356}
+html[data-bs-theme="dark"] #sims .ops-kpi-card:nth-child(4){border-top-color:#aa92ef}
+html[data-bs-theme="dark"] #sims .ops-kpi-card:nth-child(1) .ops-kpi-icon{color:#7dc4f4}
+html[data-bs-theme="dark"] #sims .ops-kpi-card:nth-child(2) .ops-kpi-icon{color:#69d2a2}
+html[data-bs-theme="dark"] #sims .ops-kpi-card:nth-child(3) .ops-kpi-icon{color:#f2ca65}
+html[data-bs-theme="dark"] #sims .ops-kpi-card:nth-child(4) .ops-kpi-icon{color:#b9a2ff}
+
+html[data-bs-theme="dark"] #sims .ops-kpi-card:hover,
+.dark-theme #sims .ops-kpi-card:hover{
+	border-color:#53627a;
+	box-shadow:0 13px 28px rgba(0,0,0,.3),0 2px 5px rgba(0,0,0,.2);
+}
+
+html[data-bs-theme="dark"] #sims .ops-kpi-label,
+html[data-bs-theme="dark"] #sims .ops-kpi-value,
+.dark-theme #sims .ops-kpi-label,
+.dark-theme #sims .ops-kpi-value{
+	color:#edf2f8;
+}
+
+html[data-bs-theme="dark"] #sims .ops-kpi-sub,
+html[data-bs-theme="dark"] #sims .ops-chip small,
+html[data-bs-theme="dark"] #opsSimsRegion .ops-sim-mobile-meta,
+.dark-theme #sims .ops-kpi-sub,
+.dark-theme #sims .ops-chip small,
+.dark-theme #opsSimsRegion .ops-sim-mobile-meta{
+	color:#a3afc1;
+}
+
+html[data-bs-theme="dark"] #sims .ops-kpi-trend.positive{color:#77d4a7}
+html[data-bs-theme="dark"] #sims .ops-kpi-trend.negative{color:#f2bd78}
+
+html[data-bs-theme="dark"] #sims .ops-chip-row > .flex-fill,
+html[data-bs-theme="dark"] #sims .ops-chip,
+html[data-bs-theme="dark"] #sims #bulkAssignPanel,
+html[data-bs-theme="dark"] #opsSimsRegion .ops-sims-toolbar,
+.dark-theme #sims .ops-chip-row > .flex-fill,
+.dark-theme #sims .ops-chip,
+.dark-theme #sims #bulkAssignPanel,
+.dark-theme #opsSimsRegion .ops-sims-toolbar{
+	background:linear-gradient(145deg,#202a39,#1b2431);
+	border-color:#354154;
+	color:#d7e0ec;
+	box-shadow:0 6px 18px rgba(0,0,0,.16);
+}
+
+html[data-bs-theme="dark"] #sims .ops-chip span,
+.dark-theme #sims .ops-chip span{
+	color:#e7edf5;
+}
+
+html[data-bs-theme="dark"] #sims #bulkAssignPanel > div:first-child > strong,
+.dark-theme #sims #bulkAssignPanel > div:first-child > strong{
+	color:#edf2f8 !important;
+}
+
+html[data-bs-theme="dark"] #sims #bulkAssignPanel .form-select,
+html[data-bs-theme="dark"] #opsSimsRegion .form-control,
+html[data-bs-theme="dark"] #opsSimsRegion .form-select,
+.dark-theme #sims #bulkAssignPanel .form-select,
+.dark-theme #opsSimsRegion .form-control,
+.dark-theme #opsSimsRegion .form-select{
+	background-color:#151e2b;
+	border-color:#3a4659;
+	color:#e2e8f0;
+	color-scheme:dark;
+}
+
+html[data-bs-theme="dark"] #opsSimsRegion .form-control:focus,
+html[data-bs-theme="dark"] #opsSimsRegion .form-select:focus,
+.dark-theme #opsSimsRegion .form-control:focus,
+.dark-theme #opsSimsRegion .form-select:focus{
+	border-color:#7188a8;
+	box-shadow:0 0 0 .2rem rgba(110,145,190,.18);
+}
+
+html[data-bs-theme="dark"] #opsSimsRegion .table-responsive,
+.dark-theme #opsSimsRegion .table-responsive{
+	background:#192230;
+	border-color:#344054;
+	box-shadow:0 5px 18px rgba(0,0,0,.14);
+}
+
+html[data-bs-theme="dark"] #opsSimsRegion table,
+.dark-theme #opsSimsRegion table{
+	--bs-table-color:#dbe3ee;
+	--bs-table-bg:transparent;
+	--bs-table-striped-bg:#202b3a;
+	--bs-table-striped-color:#dbe3ee;
+	--bs-table-hover-bg:#273548;
+	--bs-table-hover-color:#f2f5fa;
+	--bs-table-border-color:#303c4e;
+	color:#dbe3ee;
+}
+
+html[data-bs-theme="dark"] #opsSimsRegion table thead th,
+.dark-theme #opsSimsRegion table thead th{
+	background:#222d3c !important;
+	border-color:#344054;
+	color:#c1cada !important;
+}
+
+html[data-bs-theme="dark"] #opsSimsRegion table tbody td,
+.dark-theme #opsSimsRegion table tbody td{
+	border-color:#303c4e;
+}
+
+html[data-bs-theme="dark"] #opsSimsRegion table tbody tr:hover,
+.dark-theme #opsSimsRegion table tbody tr:hover{
+	background:#273548;
+}
+
+html[data-bs-theme="dark"] #opsSimsRegion .sim-selected,
+.dark-theme #opsSimsRegion .sim-selected{
+	background:rgba(245,190,57,.12);
+	box-shadow:inset 0 0 0 1px rgba(245,190,57,.42);
+}
+
+html[data-bs-theme="dark"] #opsSimsRegion table tbody td a:not(.btn),
+.dark-theme #opsSimsRegion table tbody td a:not(.btn){
+	color:#82b8ff !important;
+}
+
+html[data-bs-theme="dark"] #opsSimsRegion .page-link,
+.dark-theme #opsSimsRegion .page-link{
+	background:#202a39;
+	border-color:#39465a;
+	color:#c1cada;
+}
+
+html[data-bs-theme="dark"] #opsSimsRegion .page-item.active .page-link,
+.dark-theme #opsSimsRegion .page-item.active .page-link{
+	background:#456d9e;
+	border-color:#456d9e;
+	color:#fff;
+}

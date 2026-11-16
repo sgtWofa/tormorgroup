@@ -3128,7 +3128,7 @@
 <script src="<?=plugin_http_path('assets/js/jquery.dataTables.min.js')?>"></script>
 <script src="<?=plugin_http_path('assets/js/dataTables.bootstrap5.min.js')?>"></script>
 <!-- Load Operations Account Plugin Scripts -->
-<script src="<?=ROOT?>/plugins/operations_account/assets/js/plugin.js?v=20260706-1"></script>
+<script src="<?=ROOT?>/plugins/operations_account/assets/js/plugin.js?v=20261116-1"></script>
 
   <script>
   window.tormorAccountAccessGuard = {

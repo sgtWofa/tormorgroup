@@ -12,6 +12,12 @@ if (!empty($row)) {
 	$postdata['customer_receipt'] = $postdata['customer_receipt'] ?? ($row->customer_receipt ?? '');
 
 	$existingStatus = ezwich_normalize_status($row->transaction_status ?? '', 'Draft');
+	if (in_array(strtolower(trim((string)$existingStatus)), ['cancelled', 'canceled'], true)) {
+		$ezwich->errors['transaction_status'] = 'Cancelled Ezwich transactions cannot be edited.';
+		set_value('errors', array_merge($ezwich->errors, $req->upload_errors));
+		message_fail($ezwich->errors['transaction_status']);
+		goto end_edit;
+	}
 	if (ezwich_status_is_declined($existingStatus)) {
 		$ezwich->errors['transaction_status'] = 'Declined ezwich transactions can no longer be edited.';
 		set_value('errors', array_merge($ezwich->errors, $req->upload_errors));

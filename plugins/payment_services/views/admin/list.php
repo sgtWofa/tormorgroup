@@ -936,7 +936,7 @@ unset($exportQuery['url']);
             let badge='badge bg-secondary';
             if(status==='pending')  badge='badge bg-warning text-dark';
             else if(status==='approved') badge='badge bg-success';
-            else if(status==='rejected' || status==='declined' || status==='reversed') badge='badge bg-danger';
+            else if(status==='rejected' || status==='declined' || status==='reversed' || status==='cancelled' || status==='canceled') badge='badge bg-danger';
 
             const actions=[];
             if(canView){
@@ -944,9 +944,14 @@ unset($exportQuery['url']);
                     `<a href=\"${VIEW_BASE}/view/${row.id}\" class=\"btn btn-sm btn-outline-primary\"><i class=\"fa fa-eye\"></i></a>`
                 );
             }
-            if(canEdit && status !== 'declined' && status !== 'reversed'){
+            if(canEdit && !['cancelled', 'canceled', 'declined', 'rejected', 'reversed'].includes(status)){
                 actions.push(
                     `<a href=\"${VIEW_BASE}/edit/${row.id}\" class=\"btn btn-sm btn-outline-warning\"><i class=\"fa fa-pen\"></i></a>`
+                );
+            }
+            if(!['cancelled', 'canceled', 'declined', 'rejected', 'reversed'].includes(status)){
+                actions.push(
+                    `<button type=\"button\" class=\"btn btn-sm btn-outline-danger js-direct-cancel\" data-id=\"${row.id}\" data-cancel-date=\"${String(row.date_created || '').slice(0, 10)}\" data-cancel-endpoint=\"${VIEW_BASE}/cancel\" data-cancel-label=\"Transaction #${row.id}\" aria-label=\"Cancel transaction #${row.id}\" title=\"Cancel transaction\"><i class=\"fa-solid fa-arrow-rotate-left\" aria-hidden=\"true\"></i></button>`
                 );
             }
 
@@ -1182,3 +1187,5 @@ unset($exportQuery['url']);
     });
 })();
 </script>
+<div class="d-none" data-direct-cancel-csrf><?=csrf()?></div>
+<script src="<?=ROOT?>/plugins/reversals/assets/direct-cancel.js?v=20261116-1"></script>

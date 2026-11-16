@@ -203,6 +203,8 @@
 											break;
 										case 'rejected':
 										case 'reversed':
+										case 'cancelled':
+										case 'canceled':
 											$badgeClass = 'badge bg-danger';
 											break;
 										default:
@@ -347,7 +349,7 @@
 					</button>
 				</a>			
 						
-				<?php if (user_can('edit_category')):?>
+				<?php if (user_can('edit_category') && !in_array(strtolower(trim((string)($row->transaction_status ?? ''))), ['cancelled', 'canceled', 'declined', 'rejected', 'reversed'], true)):?>
 					<?php if($row->transaction_type === 'Data bundle'):?>
 					<a href="<?=ROOT?>/<?=$admin_route?>/<?=$plugin_route?>/bundle_edit/<?=$row->id?>">
 						<button class="btn btn-md btn-outline-warning float-right" style="border:none;">

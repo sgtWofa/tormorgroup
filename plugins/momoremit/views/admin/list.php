@@ -154,6 +154,12 @@
 		border-color: rgba(220, 53, 69, 0.32);
 	}
 
+	.momoremit-status-cancelled {
+		background: rgba(220, 53, 69, 0.16);
+		color: #ff9aa5;
+		border-color: rgba(220, 53, 69, 0.32);
+	}
+
 	.momoremit-transaction-meta {
 		display: flex;
 		flex-wrap: wrap;
@@ -659,6 +665,7 @@
 
 	(function(){
 		const endpoint = '<?=ROOT?>/<?=$adminRoute?>/<?=$pluginRoute?>/data';
+		const cancelEndpoint = '<?=ROOT?>/<?=$adminRoute?>/<?=$pluginRoute?>/cancel';
 		const canViewDetails = <?= $canViewDetails ? 'true' : 'false' ?>;
 		const canEditTransactions = <?= user_can('edit_momoremit') ? 'true' : 'false' ?>;
 		const canRejectTransactions = <?= user_can('is_admin') ? 'true' : 'false' ?>;
@@ -790,16 +797,18 @@
 		const normalizeStatus = (value = '') => {
 			const normalized = String(value || '').trim().toLowerCase();
 			if(normalized === 'approved') return 'Approved';
+			if(normalized === 'cancelled' || normalized === 'canceled') return 'Cancelled';
 			if(normalized === 'declined') return 'Declined';
 			if(normalized === 'rejected') return 'Rejected';
 			if(normalized === 'reversed') return 'Reversed';
 			if(normalized === 'pending') return 'Pending';
-			return 'Approved';
+			return value ? String(value).trim() : 'Unknown';
 		};
 		const renderStatusBadge = (value) => {
 			const status = normalizeStatus(value);
 			const classMap = {
 				Approved: 'momoremit-status-approved',
+				Cancelled: 'momoremit-status-cancelled',
 				Pending: 'momoremit-status-pending',
 				Declined: 'momoremit-status-declined',
 				Rejected: 'momoremit-status-rejected',
@@ -891,11 +900,14 @@
 				if (canViewDetails) {
 					actionParts.push(`<a href="${viewBaseUrl}${row.id}" class="btn btn-sm btn-outline-primary rounded-pill px-3"><i class="fa-solid fa-eye me-1"></i> View</a>`);
 				}
-				if (canEditTransactions && !['Rejected', 'Declined', 'Reversed'].includes(normalizedStatus)) {
+				if (canEditTransactions && !['Cancelled', 'Rejected', 'Declined', 'Reversed'].includes(normalizedStatus)) {
 					actionParts.push(`<a href="${editBaseUrl}${row.id}" class="btn btn-sm btn-outline-warning rounded-pill px-3"><i class="fa-solid fa-pen-to-square me-1"></i> Edit</a>`);
 				}
-				if (canRejectTransactions && !['Rejected', 'Declined', 'Reversed'].includes(normalizedStatus)) {
+				if (canRejectTransactions && !['Cancelled', 'Rejected', 'Declined', 'Reversed'].includes(normalizedStatus)) {
 					actionParts.push(`<button type="button" class="btn btn-sm btn-outline-danger rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#rejectTransactionModal" data-reject-url="${editBaseUrl}${encodeURIComponent(row.id)}" data-reject-reference="${escapeHtml(row.reference || row.id || '')}"><i class="fa-solid fa-ban me-1"></i> Reject</button>`);
+				}
+				if (!['Cancelled', 'Canceled', 'Rejected', 'Declined', 'Reversed'].includes(normalizedStatus)) {
+					actionParts.push(`<button type="button" class="btn btn-sm btn-outline-danger rounded-pill px-3 js-direct-cancel" data-id="${row.id}" data-cancel-date="${String(row.date_created || '').slice(0, 10)}" data-cancel-endpoint="${cancelEndpoint}" data-cancel-label="${escapeHtml(row.reference || `Transaction #${row.id}`)}" aria-label="Cancel transaction ${escapeHtml(row.reference || row.id || '')}" title="Cancel transaction"><i class="fa-solid fa-arrow-rotate-left me-1" aria-hidden="true"></i> Cancel</button>`);
 				}
 				const actions = actionParts.join(' ');
 				const refLabel = escapeHtml(row.reference || row.id || '');
@@ -1389,6 +1401,8 @@
 		fetchData();
 	})();
 </script>
+<div class="d-none" data-direct-cancel-csrf><?=csrf()?></div>
+<script src="<?=ROOT?>/plugins/reversals/assets/direct-cancel.js?v=20261116-1"></script>
 
 <?php else:?>
 	<div class="alert alert-danger text-center">

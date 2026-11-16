@@ -8,6 +8,14 @@ use function Cfas\cfa_normalize_transaction_type;
 	// Set timezone to Accra (Africa/Accra)
 	date_default_timezone_set('Africa/Accra');
 
+	if (in_array(strtolower(trim((string)($row->transaction_status ?? ''))), ['cancelled', 'canceled'], true)) {
+		$message = 'Cancelled CFA transactions cannot be edited.';
+		$cfa->errors['transaction_status'] = $message;
+		set_value('errors', $cfa->errors);
+		message_fail($message);
+		return;
+	}
+
 	$postdata = $req->post();
 	$deno = new \Cfas\Deno;
 	$csrf = csrf_verify($postdata);

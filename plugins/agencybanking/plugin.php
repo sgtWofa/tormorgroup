@@ -35,7 +35,7 @@ if(!function_exists('agencybanking_json_response')){
 	}
 }
 
-$agencybankingJsonRoute = URL(1) === 'agencybanking' && in_array((string)(URL(2) ?? ''), ['limit-check', 'limits-api', 'data'], true);
+$agencybankingJsonRoute = URL(1) === 'agencybanking' && in_array((string)(URL(2) ?? ''), ['limit-check', 'limits-api', 'data', 'cancel'], true);
 if($agencybankingJsonRoute){
 	ini_set('display_errors', '0');
 	ini_set('display_startup_errors', '0');
@@ -532,7 +532,7 @@ add_action('controller',function(){
 		}
 	}
 
-	if(URL(1) == $vars['plugin_route'] && $req->posted())
+	if(URL(1) == $vars['plugin_route'] && $req->posted() && URL(2) !== 'cancel')
 	{
 		$ses = new \Core\Session;
 		$agencybanking = new \Agencybankings\Agencybanking;
@@ -567,6 +567,10 @@ add_action('controller',function(){
 		if(URL(2) == 'delete'){
 			require plugin_path('controllers/delete-controller.php');
 		}
+	}elseif(URL(1) == $vars['plugin_route'] && URL(2) == 'cancel' && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST'){
+		require_once plugin_path('helpers/cashdrawer-sync.php');
+		require_once __DIR__ . '/../reversals/helpers/direct-cancel.php';
+		direct_cancel_handle(direct_cancel_configuration('agencybanking'));
 	}elseif(URL(1) == $vars['plugin_route'] && URL(2) == 'data'){
 		$session = get_session();
 		if(!user_can('view_agencybanking')){

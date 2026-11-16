@@ -68,7 +68,7 @@
 			$statusTone = 'secondary';
 			if (strcasecmp($statusLabel, 'Approved') === 0) {
 				$statusTone = 'success';
-			} elseif (in_array(strtolower($statusLabel), ['declined', 'rejected', 'reversed'], true)) {
+			} elseif (in_array(strtolower($statusLabel), ['cancelled', 'canceled', 'declined', 'rejected', 'reversed'], true)) {
 				$statusTone = 'danger';
 			} elseif (strcasecmp($statusLabel, 'Pending') === 0) {
 				$statusTone = 'warning';

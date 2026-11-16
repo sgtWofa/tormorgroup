@@ -47,7 +47,9 @@
 <?php endif; ?>
 
 
+<?php if(!$is_ajax_sims): ?>
 <div id="opsSimsRegion" data-ajax-url="<?=ROOT?>/<?=$admin_route?>/<?=$plugin_route?>/ajax_sims">
+<?php endif; ?>
 	<?php
 		// Normalise SIMS KPI values so this fragment works for both full-page and ajax_sims renders
 		$opsTotalSimsKpi      = isset($opsTotalSimsKpi)      ? (int)$opsTotalSimsKpi      : (int)($total_count ?? 0);
@@ -220,7 +222,9 @@
 
 	<?=$pager->display()?>
 </div>
+<?php if(!$is_ajax_sims): ?>
 </div><!-- /#opsSimsRegion -->
+<?php endif; ?>
 <?php if(user_can('edit_sim') && !$is_ajax_sims):?>
 <div id="bulkAssignCsrf" class="d-none"><?=csrf()?></div>
 

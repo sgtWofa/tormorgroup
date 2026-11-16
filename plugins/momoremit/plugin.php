@@ -96,6 +96,11 @@ add_action('controller',function(){
 	$role = $session->roles[0] ?? '';
 	$user_id = $session->id ?? 0;
 
+	if(URL(1) === $plugin_route && URL(2) === 'cancel' && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST'){
+		require_once __DIR__ . '/../reversals/helpers/direct-cancel.php';
+		direct_cancel_handle(direct_cancel_configuration('momoremit'));
+	}
+
 	if(URL(1) == $plugin_route && URL(2) == 'limit-check'){
 		if(!user_can('add_momoremit')){
 			momoremit_send_json(['success' => false, 'message' => 'Access denied'], 403);

@@ -241,6 +241,8 @@
 									case 'declined':
 									case 'rejected':
 									case 'reversed':
+									case 'cancelled':
+									case 'canceled':
 										$badgeClass = 'badge bg-danger';
 										break;
 									default:

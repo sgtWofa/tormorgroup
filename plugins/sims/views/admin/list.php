@@ -1066,15 +1066,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function attachPagerLinks() {
-        if (!pagerWrapper) return;
-        pagerWrapper.querySelectorAll('a.sim-page-control:not(.is-disabled):not([data-pager-attached])').forEach(link => {
-            link.dataset.pagerAttached = '1';
-            link.addEventListener('click', async (event) => {
-                event.preventDefault();
-                const url = new URL(link.href, window.location.origin);
-                url.searchParams.set('ajax', '1');
-                await fetchFilteredRows(url.toString());
-            });
+        if (!pagerWrapper || pagerWrapper.dataset.pagerClickBound) return;
+        pagerWrapper.dataset.pagerClickBound = '1';
+        pagerWrapper.addEventListener('click', (event) => {
+            if (!(event.target instanceof Element)) return;
+            const link = event.target.closest('a.sim-page-control:not(.is-disabled)');
+            if (!link || !pagerWrapper.contains(link)) return;
+
+            event.preventDefault();
+            const pageUrl = new URL(link.href, window.location.href);
+            pageUrl.searchParams.delete('ajax');
+            pageUrl.searchParams.delete('__ajax');
+            window.location.assign(pageUrl.toString());
         });
     }
 

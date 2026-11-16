@@ -147,6 +147,10 @@
 										case 'declined':
 											$badgeClass = 'badge bg-danger';
 											break;
+										case 'cancelled':
+										case 'canceled':
+											$badgeClass = 'badge bg-danger';
+											break;
 										default:
 											$badgeClass = 'badge bg-secondary';
 											break;
@@ -251,7 +255,7 @@
 						<i class="fa-solid fa-chevron-left"></i> Back
 					</button>
 				</a>
-				<?php if(user_can('edit_ezwich') && !ezwich_status_is_declined($viewStatus)):?>
+				<?php if(user_can('edit_ezwich') && !in_array(strtolower(trim((string)$viewStatus)), ['cancelled', 'canceled', 'declined', 'rejected', 'reversed'], true)):?>
 				<a href="<?=ROOT?>/<?=$admin_route?>/<?=$plugin_route?>/edit/<?=$row->id?>">
 					<button class="btn btn-md btn-outline-warning btn-borderless">
 						<i class="fa-solid fa-pen-to-square"></i> Edit

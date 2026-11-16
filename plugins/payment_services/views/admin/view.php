@@ -201,6 +201,8 @@
 											break;
 										case 'declined':
 										case 'reversed':
+										case 'cancelled':
+										case 'canceled':
 											$badgeClass = 'badge bg-danger';
 											break;
 										default:
@@ -327,7 +329,7 @@
 						<i class="fa-solid fa-chevron-left"></i> Back
 					</button>
 				</a>
-				<?php if(user_can('edit_payment_service') && !payment_service_status_is_declined($row->transaction_status ?? '')): ?>
+				<?php if(user_can('edit_payment_service') && !in_array(strtolower(trim((string)($row->transaction_status ?? ''))), ['cancelled', 'canceled', 'declined', 'rejected', 'reversed'], true)): ?>
 					<a href="<?=ROOT?>/<?=$admin_route?>/<?=$plugin_route?>/edit/<?=$row->id?>">
 						<button class="btn btn-md btn-outline-warning btn-borderless">
 							<i class="fa-solid fa-pen-to-square"></i> Edit

@@ -35,7 +35,7 @@ if(!function_exists('payment_services_json_response')){
 	}
 }
 
-$paymentServicesJsonRoute = URL(1) === 'payment_services' && (string)(URL(2) ?? '') === 'data';
+$paymentServicesJsonRoute = URL(1) === 'payment_services' && in_array((string)(URL(2) ?? ''), ['data', 'cancel'], true);
 if($paymentServicesJsonRoute){
 	ini_set('display_errors', '0');
 	ini_set('display_startup_errors', '0');
@@ -736,6 +736,10 @@ add_action('controller',function(){
 	}
 
 	// JSON data endpoint for AJAX dashboard
+	if(URL(1) == $plugin_route && URL(2) == 'cancel' && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST'){
+		require_once __DIR__ . '/../reversals/helpers/direct-cancel.php';
+		direct_cancel_handle(direct_cancel_configuration('payment_services'));
+	}
 	if(URL(1) == $plugin_route && URL(2) == 'data'){
 		try{
 			if(!user_can('view_payment_service')){

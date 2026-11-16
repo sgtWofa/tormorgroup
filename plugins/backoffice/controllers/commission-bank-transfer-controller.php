@@ -405,7 +405,7 @@ if ($commissionBankPost) {
 				$sharedAccountOwnerId = $assignedAdminId > 0 ? $assignedAdminId : (int)$transfer->created_by;
 				$drawerContext = \BackOfficeCashdrawer\getActiveDrawer($sharedAccountOwnerId);
 				if (empty($drawerContext)) {
-					throw new \RuntimeException('The assigned shared-account admin has no cashdrawer available to receive the bank credit.');
+					throw new \RuntimeException('The assigned shared-account admin has no cashdrawer available to debit the selected bank.');
 				}
 				$drawerId = (int)($drawerContext['drawer_id'] ?? 0);
 				$drawerUserId = (int)($drawerContext['drawer_user_id'] ?? $transfer->created_by);
@@ -429,39 +429,35 @@ if ($commissionBankPost) {
 					throw new \RuntimeException('Unable to lock the receiving bank balance in the cashdrawer.');
 				}
 				$bankBalance = $bankBalanceRows[0] ?? null;
-				if ($bankBalance) {
-					$updatedCredit = round((float)($bankBalance->credit ?? 0) + $expectedTransferAmount, 2);
-					$updatedClosing = round((float)($bankBalance->opening_balance ?? 0) + $updatedCredit - (float)($bankBalance->debit ?? 0), 2);
-					$commissionBankDb->query(
-						"UPDATE drawer_balances
-						 SET credit = :credit, closing_balance = :closing_balance, trans_id = :transfer_id,
-						     trans_status = 'Approved commission bank transfer'
-						 WHERE id = :id",
-						[
-							'credit' => $updatedCredit,
-							'closing_balance' => $updatedClosing,
-							'transfer_id' => $transferId,
-							'id' => (int)$bankBalance->id,
-						]
-					);
-				} else {
-					$commissionBankDb->query(
-						"INSERT INTO drawer_balances
-						 (drawer_id, user_id, channel_type, channel_key, opening_balance, credit, debit, closing_balance, date_created, trans_id, trans_status)
-						 VALUES (:drawer_id, :user_id, 'ecash', :channel_key, 0, :credit, 0, :closing_balance, :date_created, :transfer_id, 'Approved commission bank transfer')",
-						[
-							'drawer_id' => $drawerId,
-							'user_id' => $drawerUserId,
-							'channel_key' => $bankChannel,
-							'credit' => $expectedTransferAmount,
-							'closing_balance' => $expectedTransferAmount,
-							'date_created' => $now,
-							'transfer_id' => $transferId,
-						]
+				if (!$bankBalance) {
+					throw new \RuntimeException('The selected bank has no balance in the assigned admin’s cashdrawer to deduct from.');
+				}
+				$openingBalance = (float)($bankBalance->opening_balance ?? 0);
+				$currentCredit = (float)($bankBalance->credit ?? 0);
+				$currentDebit = (float)($bankBalance->debit ?? 0);
+				$currentBalance = round($openingBalance + $currentCredit - $currentDebit, 2);
+				if ($currentBalance + 0.009 < $expectedTransferAmount) {
+					throw new \RuntimeException(
+						'Insufficient ' . $bankChannel . ' balance in the assigned admin’s cashdrawer. Required: GHS '
+						. number_format($expectedTransferAmount, 2) . ', available: GHS ' . number_format($currentBalance, 2) . '.'
 					);
 				}
+				$updatedDebit = round($currentDebit + $expectedTransferAmount, 2);
+				$updatedClosing = round($openingBalance + $currentCredit - $updatedDebit, 2);
+				$commissionBankDb->query(
+					"UPDATE drawer_balances
+					 SET debit = :debit, closing_balance = :closing_balance, trans_id = :transfer_id,
+					     trans_status = 'Approved commission bank transfer'
+					 WHERE id = :id",
+					[
+						'debit' => $updatedDebit,
+						'closing_balance' => $updatedClosing,
+						'transfer_id' => $transferId,
+						'id' => (int)$bankBalance->id,
+					]
+				);
 				if ($commissionBankDb->has_error) {
-					throw new \RuntimeException('Unable to credit the selected bank in the assigned admin’s shared-account cashdrawer.');
+					throw new \RuntimeException('Unable to debit the selected bank in the assigned admin’s shared-account cashdrawer.');
 				}
 				$commissionBankDb->query(
 					"UPDATE backoffice_commission_bank_transfers
@@ -502,7 +498,7 @@ if ($commissionBankPost) {
 		}
 		$commissionBankRespond(
 			true,
-			$action === 'approve' ? 'Commission transfer approved and credited to the selected shared bank account.' : 'Commission transfer rejected; its commission amounts are available again.',
+			$action === 'approve' ? 'Commission transfer approved and deducted from the selected shared bank account.' : 'Commission transfer rejected; its commission amounts are available again.',
 			['transfer_id' => $transferId]
 		);
 	}

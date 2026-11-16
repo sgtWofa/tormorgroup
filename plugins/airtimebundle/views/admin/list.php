@@ -9,6 +9,7 @@ $canDelete = user_can('delete_category');
 
 $session = get_session();
 $currentUserId = (int)($session->id ?? 0);
+$todayDate = (new \DateTimeImmutable('now', new \DateTimeZone('Africa/Accra')))->format('Y-m-d');
 
 $agentOptions = $users ?? [];
 ?>
@@ -388,7 +389,7 @@ $agentOptions = $users ?? [];
 											</a>
 											<?php endif?>				
 											
-											<?php if ($canEdit && strtolower((string)($row->transaction_status ?? '')) !== 'rejected'):?>
+											<?php if ($canEdit && !in_array(strtolower(trim((string)($row->transaction_status ?? ''))), ['cancelled','canceled','declined','rejected','reversed'], true)):?>
 												<?php if($row->transaction_type === 'Data bundle'):?>
 												<a href="<?=ROOT?>/<?=$admin_route?>/<?=$plugin_route?>/bundle_edit/<?=$row->id?>">
 													<button class="btn btn-warning btn-sm" title="Edit">
@@ -409,6 +410,9 @@ $agentOptions = $users ?? [];
 													</button>
 												</a>
 												<?php endif;?>
+											<?php endif;?>
+											<?php if(substr(trim((string)($row->date_created ?? '')), 0, 10) === $todayDate && !in_array(strtolower(trim((string)($row->transaction_status ?? ''))), ['cancelled','canceled','declined','rejected','reversed'], true)):?>
+												<button type="button" class="btn btn-outline-danger btn-sm js-direct-cancel" data-id="<?= (int)$row->id ?>" data-cancel-date="<?= htmlspecialchars(substr(trim((string)($row->date_created ?? '')), 0, 10), ENT_QUOTES, 'UTF-8') ?>" data-cancel-endpoint="<?=ROOT?>/<?=$admin_route?>/<?=$pluginRoute?>/cancel" data-cancel-label="Transaction #<?= (int)$row->id ?>" aria-label="Cancel transaction #<?= (int)$row->id ?>" title="Cancel transaction"><i class="fa-solid fa-arrow-rotate-left" aria-hidden="true"></i></button>
 											<?php endif;?>
 											</td>
 									</tr>
@@ -694,11 +698,11 @@ $agentOptions = $users ?? [];
 	    			let badgeClass = 'badge bg-secondary';
 	    			if(status === 'pending') badgeClass = 'badge bg-warning text-black text-dark';
 	    			else if(status === 'sent' || status === 'approved') badgeClass = 'badge bg-success';
-	    			else if(status === 'rejected' || status === 'reversed') badgeClass = 'badge bg-danger';
+	    			else if(status === 'rejected' || status === 'reversed' || status === 'cancelled' || status === 'canceled') badgeClass = 'badge bg-danger';
 	    			const viewUrl = `${VIEW_BASE}/view/${row.id}`;
 	    				let editHtml = '';
 	    				let deleteHtml = '';
-	    				if(<?= $canEdit ? 'true' : 'false' ?> && status !== 'rejected' && status !== 'reversed'){
+	    				if(<?= $canEdit ? 'true' : 'false' ?> && !['cancelled','canceled','declined','rejected','reversed'].includes(status)){
 	    					const editPath = row.transaction_type === 'Data bundle' ? 'bundle_edit' : 'airtime_edit';
 	    					editHtml = `<a href="${VIEW_BASE}/${editPath}/${row.id}"><button class="btn btn-warning btn-sm" title="Edit"><i class="fa-solid fa-pen-to-square"></i></button></a>`;
 	    				}
@@ -707,6 +711,9 @@ $agentOptions = $users ?? [];
 	    					&& (Number(row.created_by || 0) === <?= (int)$currentUserId ?> || Number(row.assigned || 0) === <?= (int)$currentUserId ?> || <?= $canDelete ? 'true' : 'false' ?>)){
 	    					deleteHtml = `<a href="${VIEW_BASE}/delete/${row.id}"><button class="btn btn-danger btn-sm" title="Delete"><i class="fa-solid fa-trash"></i></button></a>`;
 	    				}
+	    				const cancelHtml = ['cancelled','canceled','declined','rejected','reversed'].includes(status)
+	    					? ''
+	    					: `<button type="button" class="btn btn-outline-danger btn-sm js-direct-cancel" data-id="${row.id}" data-cancel-date="${String(row.date_created || '').slice(0, 10)}" data-cancel-endpoint="${VIEW_BASE}/cancel" data-cancel-label="Transaction #${row.id}" aria-label="Cancel transaction #${row.id}" title="Cancel transaction"><i class="fa-solid fa-arrow-rotate-left" aria-hidden="true"></i></button>`;
 	    				tr.innerHTML = `
 	    				<td class="d-none d-lg-table-cell"><span class="badge bg-warning text-black text-black rounded-circle pill">${((state.page-1)*state.limit)+index+1}</span>${row.id}</td>
 	    				<td class="d-none d-lg-table-cell">${formatDate(row.date_created)}</td>
@@ -739,6 +746,7 @@ $agentOptions = $users ?? [];
 	    					${<?= $canViewDetails ? 'true' : 'false' ?> ? `<a href="${viewUrl}"><button class="btn btn-primary btn-sm" title="View"><i class="fa-solid fa-eye"></i></button></a>` : ''}
 	    					${editHtml}
 	    					${deleteHtml}
+	    					${cancelHtml}
 	    				</td>`;
 	    			refs.body.appendChild(tr);
 	    		});
@@ -1084,6 +1092,8 @@ $agentOptions = $users ?? [];
 	    	});
 	    })();
 	    </script>
+	    <div class="d-none" data-direct-cancel-csrf><?=csrf()?></div>
+	    <script src="<?=ROOT?>/plugins/reversals/assets/direct-cancel.js?v=20261116-1"></script>
 
 </div>
 <?php else:?>

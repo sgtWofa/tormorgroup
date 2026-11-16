@@ -790,6 +790,8 @@ foreach($defaultFilters as $key){
 			case 'draft': return 'badge bg-secondary-subtle text-secondary';
 			case 'rejected': return 'badge bg-danger-subtle text-danger';
 			case 'declined': return 'badge bg-danger-subtle text-danger';
+			case 'cancelled':
+			case 'canceled': return 'badge bg-danger-subtle text-danger';
 			default: return 'badge bg-secondary-subtle text-secondary';
 		}
 	}
@@ -808,12 +810,15 @@ foreach($defaultFilters as $key){
 			actions.push(`<a href="${VIEW_BASE}/view/${row.id}" class="btn btn-outline-primary btn-sm"><i class="fa fa-eye"></i></a>`);
 		}
 		const statusSlug = (row.transaction_status || '').toLowerCase();
-		if(permissions.edit && statusSlug !== 'declined'){
+		if(permissions.edit && !['cancelled', 'canceled', 'declined', 'rejected', 'reversed'].includes(statusSlug)){
 			actions.push(`<a href="${VIEW_BASE}/edit/${row.id}" class="btn btn-outline-warning btn-sm"><i class="fa fa-pen"></i></a>`);
 		}
 		const deletableStatuses = ['pending','draft'];
 		if(permissions.delete && deletableStatuses.includes(statusSlug)){
 			actions.push(`<a href="${VIEW_BASE}/delete/${row.id}" class="btn btn-outline-danger btn-sm"><i class="fa fa-trash"></i></a>`);
+		}
+		if(!['cancelled', 'canceled', 'declined', 'rejected', 'reversed'].includes(statusSlug)){
+			actions.push(`<button type="button" class="btn btn-outline-danger btn-sm js-direct-cancel" data-id="${row.id}" data-cancel-date="${String(row.date_created || '').slice(0, 10)}" data-cancel-endpoint="${VIEW_BASE}/cancel" data-cancel-label="Transaction #${row.id}" aria-label="Cancel transaction #${row.id}" title="Cancel transaction"><i class="fa-solid fa-arrow-rotate-left" aria-hidden="true"></i></button>`);
 		}
 		return actions.length ? actions.join(' ') : '<span class="text-muted small">No actions</span>';
 	}
@@ -1046,6 +1051,8 @@ foreach($defaultFilters as $key){
 	document.addEventListener('DOMContentLoaded', init);
 })();
 </script>
+	<div class="d-none" data-direct-cancel-csrf><?=csrf()?></div>
+	<script src="<?=ROOT?>/plugins/reversals/assets/direct-cancel.js?v=20261116-1"></script>
 <?php else:?>
 	<div class="alert alert-danger text-center">
 		Access denied. You dont have permission for this action

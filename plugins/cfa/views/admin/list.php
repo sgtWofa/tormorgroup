@@ -1121,11 +1121,15 @@
             const editUrl = `${VIEW_BASE}/edit/${row.id}`;
             const deleteUrl = `${VIEW_BASE}/delete/${row.id}`;
             const rowNumber = ((pagination.page - 1) * pagination.limit) + index + 1;
-            const canEdit = status !== 'rejected' && (CAN_EDIT || Number(row.created_by || 0) === CURRENT_USER_ID);
+            const canEdit = !['cancelled', 'canceled', 'declined', 'rejected', 'reversed'].includes(status)
+                && (CAN_EDIT || Number(row.created_by || 0) === CURRENT_USER_ID);
             const canDelete = ['draft', 'pending'].includes(status) && (CAN_DELETE || Number(row.created_by || 0) === CURRENT_USER_ID);
             const actionButtons = [`<a class="btn btn-sm btn-outline-warning" href="${viewUrl}" title="View"><i class="fa fa-eye"></i></a>`];
             if(canEdit){ actionButtons.push(`<a class="btn btn-sm btn-outline-primary" href="${editUrl}" title="Update"><i class="fa fa-pen"></i></a>`); }
             if(canDelete){ actionButtons.push(`<a class="btn btn-sm btn-outline-danger" href="${deleteUrl}" title="Delete"><i class="fa fa-trash"></i></a>`); }
+            if(!['cancelled', 'canceled', 'declined', 'rejected', 'reversed'].includes(status)){
+              actionButtons.push(`<button type="button" class="btn btn-sm btn-outline-danger js-direct-cancel" data-id="${row.id}" data-cancel-date="${String(row.date_created || '').slice(0, 10)}" data-cancel-endpoint="${VIEW_BASE}/cancel" data-cancel-label="Transaction #${row.id}" aria-label="Cancel transaction #${row.id}" title="Cancel transaction"><i class="fa-solid fa-arrow-rotate-left" aria-hidden="true"></i></button>`);
+            }
             const statusLabel = status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Unknown';
             const customerPhone = row.customer_phone ? escapeHtml(row.customer_phone) : '<span class="text-muted">N/A</span>';
 
@@ -1764,6 +1768,8 @@
       }
       recalcDrawerPayload();
     </script>
+    <div class="d-none" data-direct-cancel-csrf><?=csrf()?></div>
+    <script src="<?=ROOT?>/plugins/reversals/assets/direct-cancel.js?v=20261116-1"></script>
 </div>
 <?php else:?>
 	<div class="alert alert-danger text-center">

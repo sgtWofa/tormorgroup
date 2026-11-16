@@ -99,6 +99,8 @@
 												$badgeClass = 'badge bg-success';
 												break;
 											case 'rejected':
+											case 'cancelled':
+											case 'canceled':
 												$badgeClass = 'badge bg-danger';
 												break;
 											default:
@@ -238,7 +240,7 @@
 						<i class="fa-solid fa-chevron-left"></i> Back
 					</button>
 				</a>
-				<?php if (strtolower($row->transaction_status) !== 'complete' && strtolower($row->transaction_status) !== 'rejected'): ?>					
+				<?php if (!in_array(strtolower(trim((string)($row->transaction_status ?? ''))), ['complete', 'cancelled', 'canceled', 'rejected', 'declined', 'reversed'], true)): ?>
 					<a href="<?=ROOT?>/<?=$admin_route?>/<?=$plugin_route?>/edit/<?=$row->id?>">
 						<button class="btn btn-md btn-outline-warning float-right" style="border:none;">
 							<i class="fa-solid fa-pen-to-square"></i> Edit

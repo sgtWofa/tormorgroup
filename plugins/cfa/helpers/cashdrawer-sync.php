@@ -659,4 +659,129 @@ if (!function_exists('cfa_remove_cashdrawer_entries')) {
             );
         }
     }
+
+    if (!function_exists('cfa_reverse_transaction_entries')) {
+        function cfa_reverse_transaction_entries(int $transId, int $actorUserId, string $timestamp): array
+        {
+            if ($transId <= 0) {
+                return ['ok' => false, 'message' => 'Missing CFA transaction reference.'];
+            }
+
+            cfa_ensure_fx_table();
+            $db = new Database;
+            $entriesByTable = [
+                'drawer_denos' => ['currency' => null, 'channel' => 'CASH_DRAWER'],
+                'drawer_fx_denos' => ['currency' => 'CFA', 'channel' => 'CASH_CFA'],
+            ];
+            $affectedChannels = [];
+
+            foreach ($entriesByTable as $table => $details) {
+                if (!$db->table_exists([$table])) {
+                    continue;
+                }
+                $params = ['trans_id' => $transId];
+                $currencyFilter = '';
+                if ($details['currency'] !== null) {
+                    $currencyFilter = ' AND currency = :currency';
+                    $params['currency'] = $details['currency'];
+                }
+                $entries = $db->query(
+                    "SELECT drawer_id, user_id, denomination, `count`, volume" .
+                    ($details['currency'] !== null ? ', currency' : '') .
+                    " FROM {$table} WHERE trans_id = :trans_id{$currencyFilter} ORDER BY id ASC",
+                    $params
+                ) ?: [];
+                if ($db->has_error) {
+                    return ['ok' => false, 'message' => 'Unable to read the original CFA cashdrawer entries: ' . $db->error];
+                }
+
+                foreach ($entries as $entry) {
+                    $drawerId = (int)($entry->drawer_id ?? 0);
+                    $drawerUserId = (int)($entry->user_id ?? 0);
+                    $count = (int)($entry->count ?? 0);
+                    $volume = (float)($entry->volume ?? 0);
+                    if ($drawerId <= 0 || $drawerUserId <= 0 || ($count === 0 && abs($volume) < 0.00001)) {
+                        continue;
+                    }
+
+                    $balanceParams = [
+                        'drawer_id' => $drawerId,
+                        'user_id' => $drawerUserId,
+                        'denomination' => $entry->denomination,
+                    ];
+                    if ($details['currency'] !== null) {
+                        $balanceParams['currency'] = $details['currency'];
+                    }
+                    $balanceRows = $db->query(
+                        "SELECT COALESCE(SUM(`count`), 0) AS balance_count
+                         FROM {$table}
+                         WHERE drawer_id = :drawer_id AND user_id = :user_id AND denomination = :denomination{$currencyFilter}",
+                        $balanceParams
+                    ) ?: [];
+                    if ($db->has_error) {
+                        return ['ok' => false, 'message' => 'Unable to validate the CFA drawer balance: ' . $db->error];
+                    }
+                    $availableCount = (int)($balanceRows[0]->balance_count ?? 0);
+                    if ($availableCount - $count < 0) {
+                        return [
+                            'ok' => false,
+                            'message' => 'The cashdrawer no longer has the original denomination balance required to reverse this CFA transaction.',
+                        ];
+                    }
+
+                    $insertParams = [
+                        'drawer_id' => $drawerId,
+                        'user_id' => $drawerUserId,
+                        'denomination' => $entry->denomination,
+                        'count' => -$count,
+                        'volume' => -$volume,
+                        'date_created' => $timestamp,
+                        'created_by' => $actorUserId,
+                        'trans_id' => $transId,
+                        'trans_status' => 'Cancelled',
+                    ];
+                    if ($details['currency'] !== null) {
+                        $db->query(
+                            "INSERT INTO {$table}
+                             (drawer_id, user_id, currency, denomination, `count`, volume, date_created, created_by, trans_id, trans_status)
+                             VALUES (:drawer_id, :user_id, :currency, :denomination, :count, :volume, :date_created, :created_by, :trans_id, :trans_status)",
+                            array_merge($insertParams, ['currency' => $entry->currency ?? $details['currency']])
+                        );
+                    } else {
+                        $db->query(
+                            "INSERT INTO {$table}
+                             (drawer_id, user_id, denomination, `count`, volume, date_created, created_by, trans_id, trans_status)
+                             VALUES (:drawer_id, :user_id, :denomination, :count, :volume, :date_created, :created_by, :trans_id, :trans_status)",
+                            $insertParams
+                        );
+                    }
+                    if ($db->has_error) {
+                        return ['ok' => false, 'message' => 'Unable to save the CFA drawer reversal: ' . $db->error];
+                    }
+                    $key = $drawerId . ':' . $drawerUserId . ':' . $details['channel'];
+                    $affectedChannels[$key] = [
+                        'drawer_id' => $drawerId,
+                        'user_id' => $drawerUserId,
+                        'channel' => $details['channel'],
+                        'is_fx' => $details['currency'] !== null,
+                        'currency' => $details['currency'] ?? 'GHS',
+                    ];
+                }
+            }
+
+            foreach ($affectedChannels as $channel) {
+                cfa_refresh_cash_channel(
+                    $channel['drawer_id'],
+                    $channel['user_id'],
+                    $channel['channel'],
+                    $transId,
+                    'Cancelled',
+                    $channel['is_fx'],
+                    $channel['currency']
+                );
+            }
+
+            return ['ok' => true, 'message' => ''];
+        }
+    }
 }

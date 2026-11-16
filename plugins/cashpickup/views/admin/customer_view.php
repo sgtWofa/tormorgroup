@@ -1321,8 +1321,7 @@
 					<table class="table table-striped align-middle mb-0 cashpickup-statement-table">
 						<thead>
 							<tr>
-								<th>Transaction Date</th>
-								<th>Transaction ID / Reference</th>
+								<th>Transaction / Reference</th>
 								<th>Activity / Description</th>
 								<th class="text-end d-md-none">Received</th>
 								<th class="text-end d-md-none">Payout</th>
@@ -1336,8 +1335,8 @@
 						<tbody>
 							<?php if (empty($statementRows)): ?>
 								<tr>
-									<td class="text-center text-muted py-5 d-md-none" colspan="8">No customer ledger statement rows found.</td>
-									<td class="text-center text-muted py-5 d-none d-md-table-cell" colspan="6">No customer ledger statement rows found.</td>
+									<td class="text-center text-muted py-5 d-md-none" colspan="7">No customer ledger statement rows found.</td>
+									<td class="text-center text-muted py-5 d-none d-md-table-cell" colspan="5">No customer ledger statement rows found.</td>
 								</tr>
 							<?php else: ?>
 								<?php foreach ($statementRows as $statementRow): ?>
@@ -1355,8 +1354,8 @@
 										$statementRepayment = (float)($statementRow->credit_repayment_amount ?? 0);
 									?>
 									<tr>
-										<td class="text-nowrap"><?=esc((string)get_date_time($statementRow->date_created ?? ''))?></td>
-										<td>
+										<td class="text-nowrap">
+											<div class="small text-muted"><?=esc((string)get_date_time($statementRow->date_created ?? ''))?></div>
 											<div class="fw-semibold">#<?=esc((string)($statementRow->id ?? ''))?></div>
 											<?php if ($statementTracking !== ''): ?>
 												<div class="small text-muted text-break">Ref: <?=esc($statementTracking)?></div>

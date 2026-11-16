@@ -37,6 +37,7 @@ if(!function_exists('ezwich_json_response')){
 
 $ezwichJsonRoute = URL(1) === 'ezwich' && (
 	(string)(URL(2) ?? '') === 'data'
+	|| ((string)(URL(2) ?? '') === 'cancel' && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST')
 	|| ((string)(URL(2) ?? '') === '' && $_SERVER['REQUEST_METHOD'] === 'POST')
 );
 if($ezwichJsonRoute){
@@ -359,7 +360,7 @@ add_action('controller',function(){
 	$admin_route = $vars['admin_route'];
 	$plugin_route = $vars['plugin_route'];
 
-	if(URL(1) == $vars['plugin_route'] && $req->posted())
+	if(URL(1) == $vars['plugin_route'] && $req->posted() && URL(2) !== 'cancel')
 	{
 		$ses = new \Core\Session;
 		$ezwich = new \Ezwichs\Ezwich;
@@ -386,6 +387,10 @@ add_action('controller',function(){
 			require plugin_path('controllers/list-controller.php');
 		}
 
+	}elseif(URL(1) == $vars['plugin_route'] && URL(2) == 'cancel' && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST'){
+		require_once __DIR__ . '/../agencybanking/helpers/cashdrawer-sync.php';
+		require_once __DIR__ . '/../reversals/helpers/direct-cancel.php';
+		direct_cancel_handle(direct_cancel_configuration('ezwich'));
 	}elseif(URL(1) == $vars['plugin_route'] && URL(2) == 'data'){
 		$session = get_session();
 		if(!user_can('view_ezwich')){

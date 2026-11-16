@@ -3,6 +3,14 @@
 
 
 if (!empty($row)) {
+	$existingStatus = strtolower(trim((string)($row->transaction_status ?? '')));
+	if (in_array($existingStatus, ['cancelled', 'canceled'], true)) {
+		$message = 'Cancelled airtime and bundle transactions cannot be edited.';
+		$airtimebundle->errors['transaction_status'] = $message;
+		set_value('errors', $airtimebundle->errors);
+		message_fail($message);
+		return;
+	}
 
     // Set timezone to Accra
 

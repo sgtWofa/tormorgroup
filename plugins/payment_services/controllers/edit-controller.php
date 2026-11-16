@@ -2,6 +2,13 @@
 
 if (!empty($row)) {
 	date_default_timezone_set('Africa/Accra');
+	if (in_array(strtolower(trim((string)($row->transaction_status ?? ''))), ['cancelled', 'canceled'], true)) {
+		$message = 'Cancelled payment service transactions cannot be edited.';
+		$payment_service->errors['transaction_status'] = $message;
+		set_value('errors', $payment_service->errors);
+		message_fail($message);
+		return;
+	}
 	payment_service_ensure_runtime_columns();
 
 	$postdata = $req->post();

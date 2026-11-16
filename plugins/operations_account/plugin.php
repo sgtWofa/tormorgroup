@@ -3473,6 +3473,8 @@ add_action('controller', function(){
 		$limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 10;
 		if ($limit < 5) { $limit = 5; }
 		$pager = new \Core\Pager($limit);
+		$pager->page_number = $page;
+		$pager->offset = ($page - 1) * $limit;
 		$offset = $pager->offset;
 
 		$network = trim($_GET['network'] ?? '');
@@ -3510,6 +3512,22 @@ add_action('controller', function(){
 		    LEFT JOIN users AS u_assigned ON m.assigned = u_assigned.id";
 
 		// Base sims rows mirroring non-AJAX listing, but filtered and paged
+		// Total rows for pager window, using same filters
+		$countSql = "SELECT COUNT(m.id) AS total_rows $fromSql $whereSql";
+		$totalRow = $sim->query($countSql, $params)[0] ?? null;
+		$totalRows = (int)($totalRow->total_rows ?? 0);
+		$totalPages = max(1, (int)ceil($totalRows / $limit));
+		if ($pager->page_number > $totalPages) {
+			$pager->page_number = $totalPages;
+		}
+		$pager->total_pages = $totalPages;
+		$offset = ($pager->page_number - 1) * $limit;
+		$pager->offset = $offset;
+		$currentLink = preg_replace("/page=[0-9]+/", "page=".$pager->page_number, $pager->links['current']);
+		$pager->links['current'] = $currentLink;
+		$nextPage = min($totalPages, $pager->page_number + 1);
+		$pager->links['next'] = preg_replace("/page=[0-9]+/", "page=".$nextPage, $currentLink);
+
 		$query = "
 		    SELECT 
 		        m.*, 
@@ -3527,26 +3545,6 @@ add_action('controller', function(){
 		    ORDER BY m.id DESC LIMIT $limit OFFSET $offset
 		";
 		$sims = $sim->query($query, $params);
-
-		// Total rows for pager window, using same filters
-		$countSql = "SELECT COUNT(m.id) AS total_rows $fromSql $whereSql";
-		$totalRow = $sim->query($countSql, $params)[0] ?? null;
-		$totalRows = (int)($totalRow->total_rows ?? 0);
-		if ($limit > 0 && $totalRows >= 0) {
-			$totalPages = max(1, (int)ceil($totalRows / $limit));
-			// Clamp current page within bounds
-			if ($pager->page_number > $totalPages) {
-				$pager->page_number = $totalPages;
-			}
-			$pager->total_pages = $totalPages;
-			// Fix "next" link so it never goes past the last page
-			$currentLink = $pager->links['current'];
-			$nextPage    = $pager->page_number + 1;
-			if ($nextPage > $totalPages) {
-				$nextPage = $totalPages;
-			}
-			$pager->links['next'] = preg_replace("/page=[0-9]+/", "page=".$nextPage, $currentLink);
-		}
 
 		// Metrics (unassigned, assigned, sold, expired, totals) using same filters
 		$metricsBaseConditions = ['m.deleted = 0'];
