@@ -12,17 +12,77 @@ else:
 	require_once plugin_path('helpers/permissions.php');
 	$db = new \Core\Database;
 	\CashpickupCustomerAssignment\ensure_schema($db);
+	$assignmentUsageSql = \CashpickupCustomerAssignment\payout_usage_summary_sql();
+	$assignmentUsedAmountSql = static function(string $assignmentAlias) use ($assignmentUsageSql): string {
+		return "COALESCE((
+			SELECT assignment_usage.used_amount
+			FROM ({$assignmentUsageSql}) AS assignment_usage
+			WHERE assignment_usage.assignment_id = {$assignmentAlias}.id
+		),0)";
+	};
 	\CashpickupLedger\ensure_cashpickup_customer_schema($db);
 	\CashpickupLedger\ensure_cashpickup_columns($db);
 	\CashpickupLedger\ensure_cashpickup_credit_schema($db);
 	\CashpickupLedger\ensure_cashpickup_customer_approval_columns($db);
 	\CashpickupLedger\repair_customer_transaction_links($db);
+	$duplicateCustomerIdentity = "(
+		(
+			TRIM(COALESCE(duplicate_customer.id_number,'')) <> ''
+			AND LOWER(TRIM(duplicate_customer.id_number)) = LOWER(TRIM(c.id_number))
+		)
+		OR (
+			TRIM(COALESCE(duplicate_customer.phone_number,'')) <> ''
+			AND TRIM(duplicate_customer.phone_number) = TRIM(c.phone_number)
+			AND TRIM(COALESCE(duplicate_customer.full_name,'')) <> ''
+			AND LOWER(TRIM(duplicate_customer.full_name)) = LOWER(TRIM(c.full_name))
+		)
+	)";
+	$canonicalCustomerCondition = "NOT EXISTS (
+		SELECT 1
+		FROM cashpickup_customers duplicate_customer
+		WHERE duplicate_customer.deleted = 0
+		AND duplicate_customer.id <> c.id
+		AND {$duplicateCustomerIdentity}
+		AND (
+			CASE
+				WHEN LOWER(COALESCE(duplicate_customer.approval_status,'approved')) IN ('pending','draft') THEN 0
+				ELSE 1
+			END
+			<
+			CASE
+				WHEN LOWER(COALESCE(c.approval_status,'approved')) IN ('pending','draft') THEN 0
+				ELSE 1
+			END
+			OR (
+				(
+					CASE
+						WHEN LOWER(COALESCE(duplicate_customer.approval_status,'approved')) IN ('pending','draft') THEN 0
+						ELSE 1
+					END
+				) = (
+					CASE
+						WHEN LOWER(COALESCE(c.approval_status,'approved')) IN ('pending','draft') THEN 0
+						ELSE 1
+					END
+				)
+				AND duplicate_customer.id < c.id
+			)
+		)
+	)";
 	$sessionUserId = 0;
 	try {
 		$sesUser = get_session();
 		$sessionUserId = (int)($sesUser->id ?? 0);
 	} catch (\Throwable $e) {}
 	$canReviewCustomers = \CashpickupPermissions\is_top_authority($db, $sessionUserId);
+	$canAssignCustomerPayout = false;
+	$canWithdrawCustomerPayout = false;
+	try {
+		$canAssignCustomerPayout = \CashpickupPermissions\can_assign_customer_payout($db, $sessionUserId);
+		$canWithdrawCustomerPayout = \CashpickupPermissions\can_withdraw_customer_payout($db, $sessionUserId);
+	} catch (\Throwable $e) {
+		error_log('[cashpickup] Customer payout action access check failed: ' . $e->getMessage());
+	}
 	$isNonPrivileged = !(user_can('is_admin') || user_can('is_manager'));
 
 	require_once plugin_path('helpers/crm-helper.php');
@@ -33,12 +93,23 @@ else:
 		|| ($activeTab === 'new' && !$canReviewCustomers)) {
 		$activeTab = 'customers';
 	}
+	$totalCustomerCountRows = $db->query(
+		"SELECT COUNT(DISTINCT c.id) AS c
+		 FROM cashpickup_customers c
+		 WHERE c.deleted = 0
+		 AND {$canonicalCustomerCondition}"
+	) ?: [];
+	if ($db->has_error) {
+		throw new \RuntimeException('Unable to load the total customer count.');
+	}
+	$totalCustomerCount = (int)($totalCustomerCountRows[0]->c ?? 0);
 	$newCustomerCount = 0;
 	if ($canReviewCustomers) {
 		$newCustomerCountRows = $db->query(
-			"SELECT COUNT(id) AS c
-			 FROM cashpickup_customers
+			"SELECT COUNT(DISTINCT c.id) AS c
+			 FROM cashpickup_customers c
 			 WHERE deleted = 0
+			 AND {$canonicalCustomerCondition}
 			 AND LOWER(COALESCE(approval_status,'approved')) IN ('pending','draft')"
 		) ?: [];
 		$newCustomerCount = (int)($newCustomerCountRows[0]->c ?? 0);
@@ -80,7 +151,7 @@ else:
 	}
 
 	$params = [];
-	$conditions = ['c.deleted = 0'];
+	$conditions = ['c.deleted = 0', $canonicalCustomerCondition];
 	$creditSummaryJoin = "LEFT JOIN (
 		SELECT cp.customer_id,
 		       SUM(GREATEST(0, COALESCE(cp.amount_involved,0) - COALESCE(repaid.total_repaid,0))) AS credit_outstanding,
@@ -103,6 +174,18 @@ else:
 		AND (cp.approval_status IS NULL OR cp.approval_status = '' OR LOWER(cp.approval_status) IN ('approved','pending'))
 		GROUP BY cp.customer_id
 	) credit_summary ON credit_summary.customer_id = c.id";
+	$customerBalanceJoin = "LEFT JOIN (
+		SELECT cp_balance.customer_id,
+		       COALESCE(SUM(" . \CashpickupLedger\statement_delta_sql('cp_balance') . "),0) AS cash_balance
+		FROM (
+			SELECT DISTINCT id, customer_id, transaction_side, credit_mode, transaction_status,
+			                confirmed_by, amount_involved, amount_paid_out, approval_status,
+			                pickup_charge
+			FROM cashpickups
+			WHERE (deleted IS NULL OR deleted = 0)
+		) cp_balance
+		GROUP BY cp_balance.customer_id
+	) customer_balance ON customer_balance.customer_id = c.id";
 	if ($activeTab === 'new') {
 		$conditions[] = "LOWER(COALESCE(c.approval_status,'approved')) IN ('pending','draft')";
 	}
@@ -130,39 +213,49 @@ else:
 		$conditions[] = '(((' . implode(' AND ', $createdDateConditions) . ')
 			OR EXISTS (SELECT 1 FROM cashpickups cp_filter WHERE ' . implode(' AND ', $transactionDateConditions) . ')))';
 	}
+	$attentionAssignmentUsedSql = $assignmentUsedAmountSql('ca_attention');
+	$workerAssignmentUsedSql = $assignmentUsedAmountSql('ca_assigned_attention');
+	$pendingAssignmentUsedSql = $assignmentUsedAmountSql('ca_pending');
 	$attentionCondition = "(LOWER(COALESCE(c.approval_status,'approved')) IN ('pending','draft')
 			OR EXISTS (
 				SELECT 1 FROM cashpickups cp_attention
 				WHERE (cp_attention.deleted IS NULL OR cp_attention.deleted = 0)
 				AND cp_attention.customer_id = c.id
+				AND (
+					cp_attention.customer_assignment_id IS NULL
+					OR NOT EXISTS (
+						SELECT 1 FROM cashpickup_customer_assignments ca_cancelled
+						WHERE ca_cancelled.id = cp_attention.customer_assignment_id
+						AND LOWER(TRIM(COALESCE(ca_cancelled.status,''))) = 'cancelled'
+					)
+				)
 				AND (LOWER(TRIM(COALESCE(cp_attention.transaction_status,''))) LIKE 'pending%'
 					OR LOWER(TRIM(COALESCE(cp_attention.approval_status,''))) LIKE 'pending%')
 			)
-			OR COALESCE(credit_summary.credit_outstanding,0) > 0.00001
+			OR (
+				COALESCE(credit_summary.credit_outstanding,0) > 0.00001
+				AND COALESCE(customer_balance.cash_balance,0) < -0.00001
+			)
 			OR EXISTS (
 				SELECT 1
 				FROM cashpickup_customer_assignments ca_attention
 				WHERE ca_attention.customer_id = c.id
 				AND LOWER(TRIM(COALESCE(ca_attention.status,''))) = 'active'
-				AND GREATEST(0, ca_attention.amount - COALESCE((
-					SELECT SUM(COALESCE(cp_used.amount_paid_out,0) + COALESCE(cp_used.pickup_charge,0))
-					FROM cashpickups cp_used
-					WHERE (cp_used.deleted IS NULL OR cp_used.deleted = 0)
-					AND LOWER(cp_used.transaction_side) = 'pay'
-					AND LOWER(COALESCE(cp_used.source,'')) = 'customer_withdrawal'
-					AND cp_used.transaction_status = 'Approved'
-					AND cp_used.confirmed_by IS NOT NULL AND cp_used.confirmed_by != ''
-					AND COALESCE(cp_used.amount_paid_out,0) > 0
-					AND (cp_used.approval_status IS NULL OR cp_used.approval_status = ''
-						OR LOWER(cp_used.approval_status) IN ('approved','pending'))
-					AND cp_used.customer_assignment_id = ca_attention.id
-				),0)) > 0.00001
+				AND GREATEST(0, ca_attention.amount - {$attentionAssignmentUsedSql}) > 0.00001
 			))";
 	$workerAttentionCondition = "(EXISTS (
 			SELECT 1 FROM cashpickups cp_assigned_attention
 			WHERE (cp_assigned_attention.deleted IS NULL OR cp_assigned_attention.deleted = 0)
 			AND cp_assigned_attention.customer_id = c.id
 			AND cp_assigned_attention.assigned_user_id = {$sessionUserId}
+			AND (
+				cp_assigned_attention.customer_assignment_id IS NULL
+				OR NOT EXISTS (
+					SELECT 1 FROM cashpickup_customer_assignments ca_cancelled
+					WHERE ca_cancelled.id = cp_assigned_attention.customer_assignment_id
+					AND LOWER(TRIM(COALESCE(ca_cancelled.status,''))) = 'cancelled'
+				)
+			)
 			AND (LOWER(TRIM(COALESCE(cp_assigned_attention.transaction_status,''))) LIKE 'pending%'
 				OR LOWER(TRIM(COALESCE(cp_assigned_attention.approval_status,''))) LIKE 'pending%')
 		)
@@ -172,19 +265,7 @@ else:
 			WHERE ca_assigned_attention.customer_id = c.id
 			AND ca_assigned_attention.assigned_user_id = {$sessionUserId}
 			AND LOWER(TRIM(COALESCE(ca_assigned_attention.status,''))) = 'active'
-			AND GREATEST(0, ca_assigned_attention.amount - COALESCE((
-				SELECT SUM(COALESCE(cp_used.amount_paid_out,0) + COALESCE(cp_used.pickup_charge,0))
-				FROM cashpickups cp_used
-				WHERE (cp_used.deleted IS NULL OR cp_used.deleted = 0)
-				AND LOWER(cp_used.transaction_side) = 'pay'
-				AND LOWER(COALESCE(cp_used.source,'')) = 'customer_withdrawal'
-				AND cp_used.transaction_status = 'Approved'
-				AND cp_used.confirmed_by IS NOT NULL AND cp_used.confirmed_by != ''
-				AND COALESCE(cp_used.amount_paid_out,0) > 0
-				AND (cp_used.approval_status IS NULL OR cp_used.approval_status = ''
-					OR LOWER(cp_used.approval_status) IN ('approved','pending'))
-				AND cp_used.customer_assignment_id = ca_assigned_attention.id
-			),0)) > 0.00001
+			AND GREATEST(0, ca_assigned_attention.amount - {$workerAssignmentUsedSql}) > 0.00001
 		))";
 	$visibleAttentionCondition = $canReviewCustomers ? $attentionCondition : $workerAttentionCondition;
 	if ($attentionFilter === '1') {
@@ -261,6 +342,7 @@ else:
 		'total_received' => 0,
 		'total_paid_out' => 0,
 		'balance' => 0,
+		'total_customers' => $totalCustomerCount,
 	];
 	$creditMetrics = [
 		'total_credit_given' => 0,
@@ -269,13 +351,14 @@ else:
 	];
 	$assignmentSummaries = [];
 	$pendingTaskSummaries = [];
+	$pendingPayoutReviewByCustomerUser = [];
 	$attentionByCustomer = [];
 	if (in_array($activeTab, ['customers', 'new'], true)) {
-		$totalRow = $db->query("SELECT COUNT(*) AS c FROM cashpickup_customers c {$creditSummaryJoin} {$where}", $params) ?: [];
+		$totalRow = $db->query("SELECT COUNT(DISTINCT c.id) AS c FROM cashpickup_customers c {$creditSummaryJoin} {$customerBalanceJoin} {$where}", $params) ?: [];
 		$totalRows = (int)($totalRow[0]->c ?? 0);
 
 		$rows = $db->query(
-			"SELECT c.*,
+			"SELECT DISTINCT c.*,
 			        TRIM(CONCAT_WS(' ', NULLIF(creator.first_name,''), NULLIF(creator.last_name,''))) AS creator_name,
 			        0 AS tx_count,
 			        0 AS total_received,
@@ -289,13 +372,41 @@ else:
 			        ({$visibleAttentionCondition}) AS requires_attention,
 			        COALESCE(credit_summary.credit_outstanding,0) AS credit_outstanding,
 			        COALESCE(credit_summary.credit_balance_debit,0) AS credit_balance_debit,
+			        GREATEST(
+			            COALESCE((
+			                SELECT MAX(cp_pending.date_created)
+			                FROM cashpickups cp_pending
+			                WHERE (cp_pending.deleted IS NULL OR cp_pending.deleted = 0)
+			                  AND cp_pending.customer_id = c.id
+			                  AND (
+			                      cp_pending.customer_assignment_id IS NULL
+			                      OR NOT EXISTS (
+			                          SELECT 1 FROM cashpickup_customer_assignments ca_cancelled
+			                          WHERE ca_cancelled.id = cp_pending.customer_assignment_id
+			                            AND LOWER(TRIM(COALESCE(ca_cancelled.status,''))) = 'cancelled'
+			                      )
+			                  )
+			                  AND (LOWER(TRIM(COALESCE(cp_pending.transaction_status,''))) LIKE 'pending%'
+			                       OR LOWER(TRIM(COALESCE(cp_pending.approval_status,''))) LIKE 'pending%')
+			            ), '1000-01-01 00:00:00'),
+			            COALESCE((
+			                SELECT MAX(ca_pending.date_created)
+			                FROM cashpickup_customer_assignments ca_pending
+			                WHERE ca_pending.customer_id = c.id
+			                  AND LOWER(TRIM(COALESCE(ca_pending.status,''))) = 'active'
+			                  AND GREATEST(0, ca_pending.amount - {$pendingAssignmentUsedSql}) > 0.00001
+			            ), '1000-01-01 00:00:00')
+			        ) AS last_pending_activity,
 			        COALESCE(c.date_updated, c.date_created) AS last_updated
 			 FROM cashpickup_customers c
 			 LEFT JOIN users creator ON creator.id = CAST(NULLIF(c.created_by,'') AS UNSIGNED)
 			 {$creditSummaryJoin}
+			 {$customerBalanceJoin}
 			 {$where}
 			 ORDER BY
 			          requires_attention DESC,
+			          CASE WHEN last_pending_activity > '1000-01-01 00:00:00' THEN 0 ELSE 1 END,
+			          last_pending_activity DESC,
 			          CASE WHEN LOWER(COALESCE(c.approval_status,'approved')) IN ('pending','draft') THEN 0 ELSE 1 END,
 			          COALESCE(c.date_created,'1000-01-01') DESC,
 			          (COALESCE(c.full_name,'') = '') ASC,
@@ -369,21 +480,7 @@ else:
 					        SUM(GREATEST(0, a.amount - COALESCE(used.used_amount,0))) AS remaining_amount
 					 FROM cashpickup_customer_assignments a
 					 LEFT JOIN users u ON u.id = a.assigned_user_id
-					 LEFT JOIN (
-						SELECT customer_assignment_id,
-						       COALESCE(SUM(COALESCE(amount_paid_out,0) + COALESCE(pickup_charge,0)),0) AS used_amount
-						FROM cashpickups
-						WHERE (deleted IS NULL OR deleted = 0)
-						AND LOWER(transaction_side) = 'pay'
-						AND LOWER(COALESCE(source,'')) = 'customer_withdrawal'
-						AND transaction_status = 'Approved'
-						AND confirmed_by IS NOT NULL AND confirmed_by != ''
-						AND COALESCE(amount_paid_out,0) > 0
-						AND (approval_status IS NULL OR approval_status = ''
-							OR LOWER(approval_status) IN ('approved','pending'))
-						AND customer_assignment_id IS NOT NULL
-						GROUP BY customer_assignment_id
-					 ) used ON used.customer_assignment_id = a.id
+					 LEFT JOIN ({$assignmentUsageSql}) used ON used.assignment_id = a.id
 					 WHERE a.customer_id IN ({$customerIdList})
 					 AND LOWER(TRIM(COALESCE(a.status,''))) = 'active'
 					 GROUP BY a.customer_id, a.assigned_user_id, u.first_name, u.last_name",
@@ -409,18 +506,25 @@ else:
 				}
 
 				$pendingRows = $db->query(
-					"SELECT cp.customer_id, cp.transaction_side, cp.assigned_user_id,
-					        COUNT(*) AS pending_count,
+					"SELECT DISTINCT cp.id, cp.customer_id, cp.transaction_side, cp.assigned_user_id, cp.date_created,
+					        cp.amount_paid_out, cp.amount_involved, cp.pickup_charge,
 					        u.first_name AS assigned_first_name,
 					        u.last_name AS assigned_last_name
 					 FROM cashpickups cp
 					 LEFT JOIN users u ON u.id = cp.assigned_user_id
 					 WHERE (cp.deleted IS NULL OR cp.deleted = 0)
 					 AND cp.customer_id IN ({$customerIdList})
+					 AND (
+						cp.customer_assignment_id IS NULL
+						OR NOT EXISTS (
+							SELECT 1 FROM cashpickup_customer_assignments ca_cancelled
+							WHERE ca_cancelled.id = cp.customer_assignment_id
+							AND LOWER(TRIM(COALESCE(ca_cancelled.status,''))) = 'cancelled'
+						)
+					 )
 					 AND (LOWER(TRIM(COALESCE(cp.transaction_status,''))) LIKE 'pending%'
 						OR LOWER(TRIM(COALESCE(cp.approval_status,''))) LIKE 'pending%')
-					 GROUP BY cp.customer_id, cp.transaction_side, cp.assigned_user_id,
-					          u.first_name, u.last_name",
+					 ORDER BY cp.date_created DESC, cp.id DESC",
 					[]
 				);
 				if ($db->has_error) {
@@ -432,16 +536,24 @@ else:
 						continue;
 					}
 					$assignedUserId = (int)($pendingRow->assigned_user_id ?? 0);
+					$side = strtolower(trim((string)($pendingRow->transaction_side ?? '')));
 					$firstName = trim((string)($pendingRow->assigned_first_name ?? ''));
 					$lastName = trim((string)($pendingRow->assigned_last_name ?? ''));
+					$amount = $side === 'pay'
+						? (float)($pendingRow->amount_paid_out ?? 0) + (float)($pendingRow->pickup_charge ?? 0)
+						: (float)($pendingRow->amount_involved ?? 0);
 					$pendingTaskSummaries[$customerId][] = [
-						'side' => strtolower(trim((string)($pendingRow->transaction_side ?? ''))),
+						'side' => $side,
 						'user_id' => $assignedUserId,
+						'id' => (int)($pendingRow->id ?? 0),
+						'amount' => $amount,
 						'name' => $assignedUserId > 0
 							? (trim($firstName . ' ' . $lastName) ?: 'User #' . $assignedUserId)
 							: 'Not assigned — management review',
-						'count' => (int)($pendingRow->pending_count ?? 0),
 					];
+					if ($side === 'pay' && $assignedUserId > 0) {
+						$pendingPayoutReviewByCustomerUser[$customerId][$assignedUserId] = true;
+					}
 				}
 			}
 		}
@@ -467,14 +579,16 @@ else:
 			}
 			$approvalStatus = strtolower(trim((string)($customer->approval_status ?? 'approved')));
 			$needsReview = in_array($approvalStatus, ['pending', 'draft'], true);
-			$balance = max(0.0, (float)($customer->total_received ?? 0)
+			$balance = (float)($customer->total_received ?? 0)
 				- (float)($customer->total_paid_out ?? 0)
-				- (float)($customer->credit_balance_debit ?? 0));
+				- (float)($customer->credit_balance_debit ?? 0);
+			$availableBalance = max(0.0, $balance);
 			$items = [];
 			if ($canReviewCustomers && $needsReview) {
 				$items[] = [
 					'task' => 'Customer registration needs approval.',
 					'assignee' => 'Admin / Operations Manager / General Manager',
+					'action' => 'approve_customer',
 				];
 			}
 
@@ -485,10 +599,12 @@ else:
 				$sideLabel = $pendingTask['side'] === 'pay'
 					? 'Payout'
 					: ($pendingTask['side'] === 'receive' ? 'Deposit' : 'Transaction');
-				$count = max(1, (int)$pendingTask['count']);
+				$amount = max(0.0, (float)$pendingTask['amount']);
 				$items[] = [
-					'task' => $sideLabel . ($count === 1 ? ' is' : 's are') . ' awaiting review (' . $count . ').',
+					'task' => $sideLabel . ' GH₵ ' . number_format($amount, 2) . ' is awaiting review.',
 					'assignee' => $pendingTask['name'],
+					'action' => 'review_transaction',
+					'transaction_id' => (int)$pendingTask['id'],
 				];
 			}
 
@@ -497,12 +613,19 @@ else:
 				if (!$canReviewCustomers && (int)$assignment['user_id'] !== $sessionUserId) {
 					continue;
 				}
-				$available = min($balance, (float)$assignment['remaining']);
+				if (!empty($pendingPayoutReviewByCustomerUser[$customerId][(int)$assignment['user_id']])) {
+					continue;
+				}
+				$available = min($availableBalance, (float)$assignment['remaining']);
 				$items[] = [
 					'task' => $available > 0.00001
 						? 'Payout ready: GH₵ ' . number_format($available, 2) . ' available.'
 						: 'Assigned payout balance has no matching customer balance; reconcile before payout.',
 					'assignee' => $assignment['name'],
+					'user_id' => (int)$assignment['user_id'],
+					'action' => ((int)$assignment['user_id'] === $sessionUserId && $canWithdrawCustomerPayout && $available > 0.00001 && !$needsReview)
+						? 'pay_assigned'
+						: ($canAssignCustomerPayout ? 'manage_assignment' : 'review_ledger'),
 				];
 				if ((int)$assignment['user_id'] === $sessionUserId) {
 					$viewerAssignedBalance += (float)$assignment['remaining'];
@@ -510,17 +633,18 @@ else:
 			}
 
 			$creditOutstanding = max(0.0, (float)($customer->credit_outstanding ?? 0));
-			if ($canReviewCustomers && $creditOutstanding > 0.00001) {
+			if ($canReviewCustomers && $creditOutstanding > 0.00001 && $balance < -0.00001) {
 				$items[] = [
 					'task' => 'Credit repayment follow-up: GH₵ ' . number_format($creditOutstanding, 2) . ' outstanding.',
 					'assignee' => 'Management follow-up',
+					'action' => 'review_ledger',
 				];
 			}
 			if (empty($items)) {
 				continue;
 			}
 
-			$availableForViewer = min($balance, $viewerAssignedBalance);
+			$availableForViewer = min($availableBalance, $viewerAssignedBalance);
 			$attentionByCustomer[$customerId] = [
 				'items' => $items,
 				'viewer_payout_available' => $approvalStatus === 'approved' ? $availableForViewer : 0.0,
@@ -536,6 +660,7 @@ else:
 		'total_received' => 0,
 		'total_paid_out' => 0,
 		'balance' => 0,
+		'total_customers' => $totalCustomerCount,
 	];
 	if ($activeTab === 'gl') {
 		try {
@@ -560,9 +685,12 @@ else:
 				'total_received' => 0,
 				'total_paid_out' => 0,
 				'balance' => 0,
+				'total_customers' => $totalCustomerCount,
 			];
 		}
 	}
+	$metrics['total_customers'] = $totalCustomerCount;
+	$generalLedgerMetrics['total_customers'] = $totalCustomerCount;
 
 	$crmData = ['agent_options' => []];
 	$crmFilters = [
@@ -620,7 +748,7 @@ else:
 			// Silently fail for CRM tab
 		}
 	}
-	$renderAttentionCard = function(int $customerId) use ($attentionByCustomer, $admin_route, $plugin_route) {
+	$renderAttentionCard = function(int $customerId) use ($attentionByCustomer, $admin_route, $plugin_route, $canReviewCustomers, $canAssignCustomerPayout, $canWithdrawCustomerPayout, $sessionUserId) {
 		$attention = $attentionByCustomer[$customerId] ?? null;
 		if (empty($attention['items'])) {
 			return;
@@ -630,17 +758,37 @@ else:
 			<div class="fw-semibold small mb-1"><i class="fa-solid fa-triangle-exclamation me-1"></i>Attention — next step</div>
 			<ul class="small mb-1 ps-3">
 				<?php foreach($attention['items'] as $item): ?>
-					<li>
-						<?=esc((string)$item['task'])?>
-						<span class="text-body-secondary">Assigned to: <?=esc((string)$item['assignee'])?></span>
+					<li class="d-flex flex-wrap align-items-center gap-2 mb-1">
+						<span>
+							<?=esc((string)$item['task'])?>
+							<span class="text-body-secondary">Assigned to: <?=esc((string)$item['assignee'])?></span>
+						</span>
+						<?php if(($item['action'] ?? '') === 'approve_customer' && $canReviewCustomers): ?>
+							<form method="post" action="<?=ROOT?>/<?=$admin_route?>/<?=$plugin_route?>/customer_approve/<?=$customerId?>" class="d-inline">
+								<?=csrf()?>
+								<input type="hidden" name="customer_id" value="<?=$customerId?>">
+								<button class="btn btn-sm btn-success" type="submit"><i class="fa fa-check me-1" aria-hidden="true"></i>Approve</button>
+							</form>
+						<?php elseif(($item['action'] ?? '') === 'review_transaction' && (int)($item['transaction_id'] ?? 0) > 0): ?>
+							<a class="btn btn-sm btn-outline-primary" href="<?=ROOT?>/<?=$admin_route?>/<?=$plugin_route?>/view/<?=esc((string)$item['transaction_id'])?>">
+								<i class="fa fa-eye me-1" aria-hidden="true"></i>Review transaction
+							</a>
+						<?php elseif(($item['action'] ?? '') === 'pay_assigned' && $canWithdrawCustomerPayout && (int)($item['user_id'] ?? 0) === $sessionUserId): ?>
+							<a class="btn btn-sm btn-warning" href="<?=ROOT?>/<?=$admin_route?>/<?=$plugin_route?>/customer/<?=$customerId?>#withdraw-section">
+								<i class="fa-solid fa-hand-holding-dollar me-1" aria-hidden="true"></i>Pay assigned
+							</a>
+						<?php elseif(($item['action'] ?? '') === 'manage_assignment' && $canAssignCustomerPayout): ?>
+							<a class="btn btn-sm btn-outline-primary" href="<?=ROOT?>/<?=$admin_route?>/<?=$plugin_route?>/customer/<?=$customerId?>#withdraw-section">
+								<i class="fa fa-sliders me-1" aria-hidden="true"></i>Manage assignment
+							</a>
+						<?php elseif(($item['action'] ?? '') === 'review_ledger'): ?>
+							<a class="btn btn-sm btn-outline-primary" href="<?=ROOT?>/<?=$admin_route?>/<?=$plugin_route?>/customer/<?=$customerId?>">
+								<i class="fa fa-book-open me-1" aria-hidden="true"></i>Review ledger
+							</a>
+						<?php endif; ?>
 					</li>
 				<?php endforeach; ?>
 			</ul>
-			<?php if((float)($attention['viewer_payout_available'] ?? 0) > 0.00001): ?>
-				<a class="btn btn-sm btn-warning mt-1" href="<?=ROOT?>/<?=$admin_route?>/<?=$plugin_route?>/customer/<?=$customerId?>#withdraw-section">
-					<i class="fa-solid fa-hand-holding-dollar me-1"></i>Pay assigned GH₵ <?=number_format((float)$attention['viewer_payout_available'], 2)?>
-				</a>
-			<?php endif; ?>
 		</div>
 		<?php
 	};
@@ -685,6 +833,15 @@ else:
 						<i class="fa fa-coins text-warning"></i>
 					</div>
 					<div class="fw-bold">GH&#8373; <?=number_format((float)$metrics['total_paid_out'], 2)?></div>
+				</div>
+			</div>
+			<div class="col-12 col-md-4">
+				<div class="border rounded p-3 h-100">
+					<div class="d-flex align-items-center justify-content-between">
+						<div class="text-muted">Total Customers</div>
+						<i class="fa fa-users text-info"></i>
+					</div>
+					<div class="fw-bold"><?=number_format((int)$metrics['total_customers'])?></div>
 				</div>
 			</div>
 		</div>
@@ -1372,6 +1529,15 @@ else:
 						<i class="fa fa-coins text-warning"></i>
 					</div>
 					<div class="fw-bold">GH&#8373; <?=number_format((float)($generalLedgerMetrics['total_paid_out'] ?? 0), 2)?></div>
+				</div>
+			</div>
+			<div class="col-12 col-md-4">
+				<div class="border rounded p-3 h-100">
+					<div class="d-flex align-items-center justify-content-between">
+						<div class="text-muted">Total Customers</div>
+						<i class="fa fa-users text-info"></i>
+					</div>
+					<div class="fw-bold"><?=number_format((int)($generalLedgerMetrics['total_customers'] ?? 0))?></div>
 				</div>
 			</div>
 		</div>

@@ -6,6 +6,7 @@
 	require_once plugin_path('helpers/customer-ledger.php');
 	require_once plugin_path('helpers/transfer-allocation.php');
 	require_once plugin_path('helpers/customer-assignment.php');
+	require_once plugin_path('helpers/permissions.php');
 	$db = new \Core\Database;
 	\CashpickupCustomerAssignment\ensure_schema($db);
 	\CashpickupLedger\ensure_cashpickup_customer_schema($db);
@@ -15,22 +16,19 @@
 	$session = get_session();
 	$user_id = (int)($session->id ?? 0);
 	$isManagerOrAdmin = (user_can('is_manager') || user_can('is_admin'));
+	$isOperationsManager = false;
 	$isGeneralManager = false;
+	$canAssignPayout = false;
+	$canWithdraw = false;
 	try {
-		$dbRole = new \Core\Database;
-		$gm = $dbRole->query(
-			"SELECT 1
-			 FROM user_roles_map urm
-			 JOIN user_roles ur ON ur.id = urm.role_id
-			 WHERE urm.disabled = 0
-			 AND urm.user_id = :uid
-			 AND LOWER(ur.role) IN ('general manager','general_manager','generalmanager','gm','is_general_manager')
-			 LIMIT 1",
-			['uid' => $user_id]
-		);
-		$isGeneralManager = !empty($gm);
-	} catch (\Throwable $e) {}
-	$canApproveDeny = (user_can('is_admin') || $isGeneralManager);
+		$isOperationsManager = \CashpickupPermissions\is_operations_manager($db, $user_id);
+		$isGeneralManager = \CashpickupPermissions\is_general_manager($db, $user_id);
+		$canAssignPayout = user_can('is_admin') || $isOperationsManager || $isGeneralManager;
+		$canWithdraw = \CashpickupPermissions\can_withdraw_customer_payout($db, $user_id);
+	} catch (\Throwable $e) {
+		error_log('[cashpickup] Customer payout access check failed: ' . $e->getMessage());
+	}
+	$canApproveDeny = user_can('is_admin') || $isOperationsManager || $isGeneralManager;
 	$canCreateCreditPayout = (user_can('is_admin') || user_can('is_manager'));
 	$canEditCashpickup = (user_can('is_admin') || user_can('is_manager'));
 	$getAllocationRemaining = function (int $receiveId) use ($db, $user_id): float {
@@ -99,11 +97,26 @@
 	$customerAssignments = \CashpickupCustomerAssignment\get_customer_assignments($db, $customerId);
 	$unassignedBalance = \CashpickupCustomerAssignment\get_unassigned_balance($db, $customerId);
 	$viewerAssignedBalance = \CashpickupCustomerAssignment\get_remaining_amount($db, $customerId, $user_id);
-	$withdrawAvailable = $isManagerOrAdmin
+	$withdrawAvailable = !$canWithdraw
+		? 0.0
+		: ($isOperationsManager
 		? max(0.0, (float)$metrics['balance'])
-		: min(max(0.0, (float)$metrics['balance']), $viewerAssignedBalance);
+		: min(max(0.0, (float)$metrics['balance']), $viewerAssignedBalance));
+	$viewerChargeAssignments = [];
+	foreach ($customerAssignments as $assignment) {
+		if (strtolower(trim((string)($assignment->status ?? ''))) !== 'active'
+			|| (int)($assignment->assigned_user_id ?? 0) !== $user_id
+			|| (float)($assignment->remaining_amount ?? 0) <= 0.00001) {
+			continue;
+		}
+		$viewerChargeAssignments[] = [
+			'amount' => (float)($assignment->amount ?? 0),
+			'pickup_charge' => (float)($assignment->pickup_charge ?? 0),
+			'remaining_amount' => (float)($assignment->remaining_amount ?? 0),
+		];
+	}
 	$assignmentUsers = [];
-	if ($isManagerOrAdmin) {
+	if ($canAssignPayout) {
 		$assignmentUsers = $db->query(
 			"SELECT u.id, u.first_name, u.last_name
 			 FROM users u
@@ -121,7 +134,11 @@
 				JOIN user_roles ur ON ur.id = urm.role_id
 				WHERE urm.disabled = 0
 				AND urm.user_id = u.id
-				AND LOWER(ur.role) IN ('manager','admin','is_manager','is_admin')
+				AND LOWER(TRIM(ur.role)) IN (
+					'manager','admin','is_manager','is_admin',
+					'general manager','general_manager','generalmanager','gm','is_general_manager',
+					'operations manager','operations_manager','operationsmanager','ops manager','ops_manager','opsmanager','is_operations_manager'
+				)
 			 )
 			 ORDER BY u.first_name, u.last_name"
 		) ?: [];
@@ -247,9 +264,15 @@
 	list($matchSqlLedger, $balanceParams) = \CashpickupLedger\build_customer_match_sql($customerId, $phone, $idNumber, 'c', 'customer_balance');
 	$balanceSubquery = "(
 		SELECT COALESCE(SUM({$statementDeltaExprLedger}),0)
-		FROM cashpickups AS c
-		WHERE (c.deleted IS NULL OR c.deleted = 0)
-		AND {$matchSqlLedger}
+		FROM (
+			SELECT DISTINCT id, customer_id, ledger_transfer_from_customer_id, ledger_transfer_to_customer_id,
+			                phone_number, customer_id_number, date_created, transaction_side,
+			                credit_mode, transaction_status, confirmed_by, amount_involved,
+			                amount_paid_out, approval_status, pickup_charge
+			FROM cashpickups
+			WHERE (deleted IS NULL OR deleted = 0)
+		) AS c
+		WHERE {$matchSqlLedger}
 		AND (
 			c.date_created < m.date_created
 			OR (c.date_created = m.date_created AND c.id <= m.id)
@@ -311,11 +334,11 @@
 			       	END
 			       ),0) AS group_received,
 			       COUNT(*) AS receive_parts
-			FROM cashpickups AS m
+			FROM (SELECT DISTINCT m.* FROM cashpickups AS m) AS m
 			{$where}
 			GROUP BY tracking_group
 		 ) AS grp
-		 JOIN cashpickups AS m ON m.id = grp.row_id
+			JOIN (SELECT DISTINCT m.* FROM cashpickups AS m) AS m ON m.id = grp.row_id
 		 LEFT JOIN users AS u ON m.created_by = u.id
 		 LEFT JOIN users AS au ON m.assigned_user_id = au.id
 		 {$viewerSortJoin}
@@ -371,7 +394,7 @@
 		}
 		if (!empty($payConditions)) {
 			$payRows = $db->query(
-				"SELECT receive_id, tracking_id, approval_status, transaction_status, confirmed_by, amount_paid_out, pickup_charge, credit_mode
+				"SELECT DISTINCT receive_id, tracking_id, approval_status, transaction_status, confirmed_by, amount_paid_out, pickup_charge, credit_mode
 				 FROM cashpickups
 				 WHERE (deleted IS NULL OR deleted = 0)
 				 AND LOWER(transaction_side) = 'pay'
@@ -467,10 +490,10 @@
 	}
 	$payoutCandidate = 0;
 	$payoutCandidateIsCredit = false;
-	if (!$isManagerOrAdmin) {
-		if ($withdrawAvailable > 0.00001) {
-			$payoutCandidate = $customerId;
-		}
+	if ($canWithdraw && $withdrawAvailable > 0.00001) {
+		$payoutCandidate = $customerId;
+	}
+	if ($canWithdraw && !$isOperationsManager) {
 		try {
 			list($matchSql, $payoutMatchParams) = \CashpickupLedger\build_customer_match_sql($customerId, $phone, $idNumber, 'm', 'customer_payout');
 			$payoutRows = $db->query(
@@ -642,11 +665,7 @@
 												<?=$csrfField?>
 												<button class="btn btn-icon btn-success" type="submit" title="Approve"><i class="fa fa-check"></i></button>
 											</form>
-											<form method="post" action="<?=ROOT?>/<?=$admin_route?>/<?=$plugin_route?>/deny/<?=esc((string)($tx->id ?? 0))?>" class="d-inline">
-												<?=$csrfField?>
-												<input type="hidden" name="denial_reason" value="">
-												<button class="btn btn-icon btn-danger" type="submit" title="Deny"><i class="fa fa-times"></i></button>
-											</form>
+											<button class="btn btn-icon btn-danger" type="button" title="Reject" aria-label="Reject" data-cashpickup-reject data-deny-url="<?=ROOT?>/<?=$admin_route?>/<?=$plugin_route?>/deny/<?=esc((string)($tx->id ?? 0))?>" data-transaction-id="<?=esc((string)($tx->id ?? 0))?>" data-customer-id="<?=esc((string)$customerId)?>"><i class="fa fa-times"></i></button>
 										<?php endif; ?>
 										<a class="btn btn-icon btn-outline-primary" title="View" href="<?=ROOT?>/<?=$admin_route?>/<?=$plugin_route?>/view/<?=esc((string)($tx->id ?? 0))?>"><i class="fa fa-eye"></i></a>
 										<?php
@@ -687,8 +706,9 @@
 		<?php
 	};
 
-	$renderTxResults = function() use ($txRows, $admin_route, $plugin_route, $customerId, $totalRows, $limit, $pager) {
+	$renderTxResults = function() use ($txRows, $admin_route, $plugin_route, $customerId, $totalRows, $limit, $pager, $canApproveDeny) {
 		$totalPages = (int)ceil(((float)$totalRows) / max(1, (int)$limit));
+		$csrfField = csrf();
 		$typeLabels = [
 			'deposit' => 'Deposit',
 			'payout' => 'Payout',
@@ -705,7 +725,7 @@
 		];
 		?>
 		<div class="card border-0 shadow-sm cashpickup-activity-results">
-			<div class="d-lg-none p-2 p-sm-3 cashpickup-activity-cards">
+			<div class="d-md-none p-2 p-sm-3 cashpickup-activity-cards">
 				<?php if(empty($txRows)): ?>
 					<div class="text-center text-body-secondary py-4">No account activity matches these filters.</div>
 				<?php else: ?>
@@ -719,6 +739,21 @@
 							$credit = (float)($tx->credit_amount ?? 0);
 							$repayment = (float)($tx->credit_repayment_amount ?? 0);
 							$relatedId = (int)($tx->related_receive_id ?? $tx->id ?? 0);
+							$recordId = (int)($tx->id ?? 0);
+							$approvalStatus = strtolower(trim((string)($tx->approval_status ?? '')));
+							$transactionStatus = strtolower(trim((string)($tx->transaction_status ?? '')));
+							$statusText = trim((string)($tx->approval_status ?? '')) !== ''
+								? (string)$tx->approval_status
+								: (string)($tx->transaction_status ?? 'Recorded');
+							$statusValue = strtolower(trim($statusText));
+							$statusTone = strpos($statusValue, 'approved') !== false ? 'success'
+								: (strpos($statusValue, 'pending') === 0 ? 'warning'
+									: (preg_match('/denied|reversed|rejected/i', $statusValue) ? 'danger' : 'secondary'));
+							$canApproveActivity = $canApproveDeny
+								&& $recordId > 0
+								&& $type !== 'credit_issued'
+								&& ($approvalStatus === 'pending'
+									|| ($approvalStatus === '' && strpos($transactionStatus, 'pending') === 0));
 						?>
 						<article class="card mb-2 cashpickup-activity-card">
 							<div class="card-body p-3">
@@ -742,24 +777,34 @@
 									<div class="col-6"><span class="text-body-secondary">Account balance</span><div class="fw-bold">GH&#8373; <?=number_format((float)($tx->balance_amount ?? 0), 2)?></div></div>
 								</div>
 								<div class="d-flex justify-content-between align-items-center border-top mt-2 pt-2">
-									<span class="small text-body-secondary"><?=esc(trim((string)($tx->approval_status ?? '')) !== '' ? ucfirst((string)$tx->approval_status) : (string)($tx->transaction_status ?? 'Recorded'))?></span>
-									<?php if($relatedId > 0): ?>
-										<a class="btn btn-sm btn-outline-primary" href="<?=ROOT?>/<?=$admin_route?>/<?=$plugin_route?>/view/<?=$relatedId?>"><i class="fa fa-arrow-up-right-from-square me-1"></i> Details</a>
-									<?php endif; ?>
+									<span class="badge text-bg-<?=$statusTone?> <?=$statusTone === 'warning' ? 'text-dark' : ''?>"><?=esc(ucfirst($statusText))?></span>
+									<div class="d-flex gap-1">
+										<?php if($canApproveActivity): ?>
+											<form method="post" action="<?=ROOT?>/<?=$admin_route?>/<?=$plugin_route?>/approve/<?=$recordId?>">
+												<?=$csrfField?>
+												<input type="hidden" name="customer_id" value="<?=esc((string)$customerId)?>">
+												<button class="btn btn-sm btn-success" type="submit"><i class="fa fa-check me-1"></i> Approve</button>
+											</form>
+											<button class="btn btn-sm btn-outline-danger" type="button" data-cashpickup-reject data-deny-url="<?=ROOT?>/<?=$admin_route?>/<?=$plugin_route?>/deny/<?=$recordId?>" data-transaction-id="<?=esc((string)$recordId)?>" data-customer-id="<?=esc((string)$customerId)?>"><i class="fa fa-times me-1"></i> Reject</button>
+										<?php endif; ?>
+										<?php if($relatedId > 0): ?>
+											<a class="btn btn-sm btn-outline-primary" href="<?=ROOT?>/<?=$admin_route?>/<?=$plugin_route?>/view/<?=$relatedId?>"><i class="fa fa-arrow-up-right-from-square me-1"></i> Details</a>
+										<?php endif; ?>
+									</div>
 								</div>
 							</div>
 						</article>
 					<?php endforeach; ?>
 				<?php endif; ?>
 			</div>
-			<div class="d-none d-lg-block table-responsive">
+			<div class="d-none d-md-block table-responsive">
 				<table class="table table-hover align-middle mb-0 cashpickup-activity-table">
 					<thead>
-						<tr><th>Date</th><th>Activity / Reference</th><th>Status</th><th class="text-end">Cash flow</th><th class="text-end">Credit / repayment</th><th class="text-end">Balance</th><th class="text-end">Action</th></tr>
+						<tr><th>Date</th><th>Activity / Reference</th><th class="text-end">Cash flow</th><th class="text-end">Balance</th><th class="text-end">Action</th></tr>
 					</thead>
 					<tbody>
 						<?php if(empty($txRows)): ?>
-							<tr><td colspan="7" class="text-center text-body-secondary py-4">No account activity matches these filters.</td></tr>
+							<tr><td colspan="5" class="text-center text-body-secondary py-4">No account activity matches these filters.</td></tr>
 						<?php else: ?>
 							<?php foreach($txRows as $tx): ?>
 								<?php
@@ -771,25 +816,54 @@
 									$credit = (float)($tx->credit_amount ?? 0);
 									$repayment = (float)($tx->credit_repayment_amount ?? 0);
 									$relatedId = (int)($tx->related_receive_id ?? $tx->id ?? 0);
+									$recordId = (int)($tx->id ?? 0);
+									$approvalStatus = strtolower(trim((string)($tx->approval_status ?? '')));
+									$transactionStatus = strtolower(trim((string)($tx->transaction_status ?? '')));
+									$statusText = trim((string)($tx->approval_status ?? '')) !== ''
+										? (string)$tx->approval_status
+										: (string)($tx->transaction_status ?? 'Recorded');
+									$statusValue = strtolower(trim($statusText));
+									$statusTone = strpos($statusValue, 'approved') !== false ? 'success'
+										: (strpos($statusValue, 'pending') === 0 ? 'warning'
+											: (preg_match('/denied|reversed|rejected/i', $statusValue) ? 'danger' : 'secondary'));
+									$canApproveActivity = $canApproveDeny
+										&& $recordId > 0
+										&& $type !== 'credit_issued'
+										&& ($approvalStatus === 'pending'
+											|| ($approvalStatus === '' && strpos($transactionStatus, 'pending') === 0));
 								?>
 								<tr>
-									<td class="text-nowrap"><?=esc((string)get_date_time($tx->date_created ?? ''))?></td>
+									<td class="text-nowrap">
+										<div><?=esc((string)get_date_time($tx->date_created ?? ''))?></div>
+										<div class="small text-body-secondary">Record #<?=esc((string)($tx->id ?? ''))?></div>
+										<div class="small text-body-secondary">Customer #<?=esc((string)$customerId)?></div>
+									</td>
 									<td>
 										<div class="d-flex align-items-center gap-2"><span class="badge text-bg-<?=$typeClass?>"><?=esc($typeLabel)?></span><span class="fw-semibold"><?=esc((string)($tx->sender_details ?? 'Account activity'))?></span></div>
-										<div class="small text-body-secondary">Customer #<?=esc((string)$customerId)?> · Record #<?=esc((string)($tx->id ?? ''))?></div>
 										<div class="small text-body-secondary"><?=esc(implode(' · ', array_filter([(string)($tx->source ?? ''), (string)($tx->payment_method ?? ''), trim((string)($tx->tracking_id ?? '')) !== '' ? 'Ref ' . (string)$tx->tracking_id : ''])))?></div>
 									</td>
-									<td><?=esc(trim((string)($tx->approval_status ?? '')) !== '' ? ucfirst((string)$tx->approval_status) : (string)($tx->transaction_status ?? 'Recorded'))?></td>
 									<td class="text-end">
 										<div class="d-inline-flex flex-column align-items-end gap-1">
+											<span class="badge text-bg-<?=$statusTone?> <?=$statusTone === 'warning' ? 'text-dark' : ''?>"><?=esc(ucfirst($statusText))?></span>
 											<?php if($received > 0): ?><span class="cashpickup-flow-amount text-success"><i class="fa-solid fa-arrow-down me-1" aria-hidden="true"></i>GH&#8373; <?=number_format($received, 2)?></span><?php endif; ?>
 											<?php if($paid > 0): ?><span class="cashpickup-flow-amount text-danger"><i class="fa-solid fa-arrow-up me-1" aria-hidden="true"></i>GH&#8373; <?=number_format($paid, 2)?></span><?php endif; ?>
-											<?php if($received <= 0 && $paid <= 0): ?><span class="text-body-secondary">—</span><?php endif; ?>
+											<?php if($credit > 0): ?><span class="cashpickup-flow-amount text-primary">Credit: GH&#8373; <?=number_format($credit, 2)?></span><?php endif; ?>
+											<?php if($repayment > 0): ?><span class="cashpickup-flow-amount text-success">Repayment: GH&#8373; <?=number_format($repayment, 2)?></span><?php endif; ?>
+											<?php if($received <= 0 && $paid <= 0 && $credit <= 0 && $repayment <= 0): ?><span class="text-body-secondary">—</span><?php endif; ?>
 										</div>
 									</td>
-									<td class="text-end"><?=number_format($credit + $repayment, 2)?></td>
 									<td class="text-end fw-semibold"><?=number_format((float)($tx->balance_amount ?? 0), 2)?></td>
-									<td class="text-end"><?php if($relatedId > 0): ?><a class="btn btn-sm btn-outline-primary" href="<?=ROOT?>/<?=$admin_route?>/<?=$plugin_route?>/view/<?=$relatedId?>" aria-label="View details"><i class="fa fa-eye"></i></a><?php endif; ?></td>
+									<td class="text-end">
+										<?php if($canApproveActivity): ?>
+											<form method="post" action="<?=ROOT?>/<?=$admin_route?>/<?=$plugin_route?>/approve/<?=$recordId?>" class="d-inline">
+												<?=$csrfField?>
+												<input type="hidden" name="customer_id" value="<?=esc((string)$customerId)?>">
+												<button class="btn btn-sm btn-success" type="submit" title="Approve" aria-label="Approve"><i class="fa fa-check"></i></button>
+											</form>
+											<button class="btn btn-sm btn-outline-danger" type="button" title="Reject" aria-label="Reject" data-cashpickup-reject data-deny-url="<?=ROOT?>/<?=$admin_route?>/<?=$plugin_route?>/deny/<?=$recordId?>" data-transaction-id="<?=esc((string)$recordId)?>" data-customer-id="<?=esc((string)$customerId)?>"><i class="fa fa-times"></i></button>
+										<?php endif; ?>
+										<?php if($relatedId > 0): ?><a class="btn btn-sm btn-outline-primary" href="<?=ROOT?>/<?=$admin_route?>/<?=$plugin_route?>/view/<?=$relatedId?>" aria-label="View details"><i class="fa fa-eye"></i></a><?php endif; ?>
+									</td>
 								</tr>
 							<?php endforeach; ?>
 						<?php endif; ?>
@@ -830,9 +904,11 @@
 		box-shadow:inset 0 -2px var(--bs-primary);
 		color:var(--bs-primary);
 	}
-	.cashpickup-activity-table,
+	.cashpickup-activity-table{
+		min-width:760px;
+	}
 	.cashpickup-statement-table{
-		min-width:940px;
+		min-width:760px;
 	}
 	.cashpickup-activity-table thead th,
 	.cashpickup-statement-table thead th{
@@ -988,7 +1064,7 @@
 	</div>
 	<div class="d-flex flex-wrap gap-2">
 		<a class="btn btn-outline-secondary" href="<?=ROOT?>/<?=$admin_route?>/<?=$plugin_route?>/customers">Back to Customers</a>
-		<?php if($isManagerOrAdmin && $customerApproved): ?>
+		<?php if($canAssignPayout && $customerApproved): ?>
 			<a class="btn btn-primary" href="<?=ROOT?>/<?=$admin_route?>/<?=$plugin_route?>/customer/<?=esc((string)$customerId)?>#withdraw-section"><i class="fa fa-user-plus me-1"></i> Assign payout</a>
 		<?php endif; ?>
 		<?php if(user_can('add_cashpickup')): ?>
@@ -1218,10 +1294,12 @@
 	<li class="nav-item" role="presentation">
 		<button class="nav-link" id="customer-statement-tab" data-bs-toggle="tab" data-bs-target="#customer-statement-pane" type="button" role="tab" aria-controls="customer-statement-pane" aria-selected="false">Statement</button>
 	</li>
-	<?php if($customerApproved): ?>
+	<?php if($customerApproved && ($canWithdraw || $canAssignPayout)): ?>
 	<li class="nav-item" role="presentation">
-		<button class="nav-link" id="withdraw-tab" data-bs-toggle="tab" data-bs-target="#withdraw-section" type="button" role="tab" aria-controls="withdraw-section" aria-selected="false">Withdraw</button>
+		<button class="nav-link" id="withdraw-tab" data-bs-toggle="tab" data-bs-target="#withdraw-section" type="button" role="tab" aria-controls="withdraw-section" aria-selected="false"><?=$canWithdraw ? 'Withdraw' : 'Payout assignments'?></button>
 	</li>
+	<?php endif; ?>
+	<?php if($customerApproved): ?>
 	<li class="nav-item" role="presentation">
 		<button class="nav-link" id="transfer-tab" data-bs-toggle="tab" data-bs-target="#transfer-section" type="button" role="tab" aria-controls="transfer-section" aria-selected="false">Transfer</button>
 	</li>
@@ -1301,6 +1379,48 @@
 		<div id="cashpickupCustomerTxContainer" data-ajax-endpoint="<?=ROOT?>/<?=$admin_route?>/<?=$plugin_route?>/customer_tx_ajax" data-customer-id="<?=esc((string)$customerId)?>">
 			<?php $renderTxResults(); ?>
 		</div>
+		<?php if($canApproveDeny): ?>
+			<div class="modal fade" id="cashpickupRejectModal" tabindex="-1" aria-labelledby="cashpickupRejectModalLabel" aria-hidden="true">
+				<div class="modal-dialog">
+					<div class="modal-content">
+						<form method="post" id="cashpickupRejectForm">
+							<div class="modal-header">
+								<h5 class="modal-title" id="cashpickupRejectModalLabel">Reject pending cashpickup</h5>
+								<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+							</div>
+							<div class="modal-body">
+								<?=$csrfField?>
+								<input type="hidden" name="customer_id" value="<?=esc((string)$customerId)?>">
+								<label for="cashpickupRejectionReason" class="form-label">Rejection reason</label>
+								<textarea class="form-control" id="cashpickupRejectionReason" name="denial_reason" rows="4" required></textarea>
+							</div>
+							<div class="modal-footer">
+								<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+								<button type="submit" class="btn btn-danger"><i class="fa fa-times me-1"></i> Reject transaction</button>
+							</div>
+						</form>
+					</div>
+				</div>
+			</div>
+			<script>
+				(function(){
+					var modal = document.getElementById('cashpickupRejectModal');
+					var form = document.getElementById('cashpickupRejectForm');
+					var reason = document.getElementById('cashpickupRejectionReason');
+					if (!modal || !form || !reason) return;
+					document.addEventListener('click', function(event){
+						var trigger = event.target.closest('[data-cashpickup-reject]');
+						if (!trigger) return;
+						form.action = trigger.getAttribute('data-deny-url') || '';
+						reason.value = '';
+						if (window.bootstrap && bootstrap.Modal) {
+							bootstrap.Modal.getOrCreateInstance(modal).show();
+						}
+					});
+					modal.addEventListener('shown.bs.modal', function(){ reason.focus(); });
+				})();
+			</script>
+		<?php endif; ?>
 		<?php if(user_can('is_admin')): ?>
 			<?php require plugin_path('views/admin/cancel-modal.php'); ?>
 		<?php endif; ?>
@@ -1316,7 +1436,7 @@
 				<div class="small text-muted">Rows: <?=number_format((int)$statementTotalRows)?></div>
 			</div>
 			<div class="card-body p-0">
-				<div class="small text-muted px-3 pt-3">Credit activity is shown separately and does not change the customer cash balance.</div>
+				<div class="small text-muted px-3 pt-3">Credit and repayment activity appears in Cash Flow and does not change the customer cash balance.</div>
 				<div class="table-responsive">
 					<table class="table table-striped align-middle mb-0 cashpickup-statement-table">
 						<thead>
@@ -1328,7 +1448,6 @@
 								<th class="text-end d-md-none">Credit</th>
 								<th class="text-end d-md-none">Repayment</th>
 								<th class="text-end d-none d-md-table-cell">Cash flow</th>
-								<th class="text-end d-none d-md-table-cell">Credit activity</th>
 								<th class="text-end">Accumulated Balance</th>
 							</tr>
 						</thead>
@@ -1336,7 +1455,7 @@
 							<?php if (empty($statementRows)): ?>
 								<tr>
 									<td class="text-center text-muted py-5 d-md-none" colspan="7">No customer ledger statement rows found.</td>
-									<td class="text-center text-muted py-5 d-none d-md-table-cell" colspan="5">No customer ledger statement rows found.</td>
+									<td class="text-center text-muted py-5 d-none d-md-table-cell" colspan="4">No customer ledger statement rows found.</td>
 								</tr>
 							<?php else: ?>
 								<?php foreach ($statementRows as $statementRow): ?>
@@ -1346,6 +1465,8 @@
 										$statementSource = trim((string)($statementRow->source ?? ''));
 										$statementMethod = trim((string)($statementRow->payment_method ?? ''));
 										$statementTracking = trim((string)($statementRow->tracking_id ?? ''));
+										$statementTransferFrom = trim((string)($statementRow->transfer_from_customer_name ?? ''));
+										$statementTransferTo = trim((string)($statementRow->transfer_to_customer_name ?? ''));
 										$statementBalance = (float)($statementRow->balance_amount ?? 0);
 										$statementType = ucwords(str_replace('_', ' ', (string)($statementRow->entry_type ?? '')));
 										$statementReceived = (float)($statementRow->received_amount ?? 0);
@@ -1367,6 +1488,9 @@
 											<?php if ($statementPhone !== ''): ?>
 												<div class="small text-muted">Phone: <?=esc($statementPhone)?></div>
 											<?php endif; ?>
+											<?php if ($statementTransferFrom !== '' || $statementTransferTo !== ''): ?>
+												<div class="small text-muted">Transfer: <?=esc($statementTransferFrom !== '' ? $statementTransferFrom : 'Unknown source')?> &rarr; <?=esc($statementTransferTo !== '' ? $statementTransferTo : 'Unknown destination')?></div>
+											<?php endif; ?>
 											<?php if ($statementSource !== ''): ?>
 												<div class="small text-muted">Source: <?=esc($statementSource)?></div>
 											<?php endif; ?>
@@ -1382,14 +1506,9 @@
 											<div class="cashpickup-statement-flow">
 												<?php if($statementReceived > 0): ?><div class="cashpickup-statement-flow-line text-success"><span><i class="fa-solid fa-arrow-down" aria-hidden="true"></i> Received</span><strong><?=number_format($statementReceived, 2)?></strong></div><?php endif; ?>
 												<?php if($statementPayout > 0): ?><div class="cashpickup-statement-flow-line text-danger"><span><i class="fa-solid fa-arrow-up" aria-hidden="true"></i> Payout</span><strong><?=number_format($statementPayout, 2)?></strong></div><?php endif; ?>
-												<?php if($statementReceived <= 0 && $statementPayout <= 0): ?><span class="text-body-secondary">—</span><?php endif; ?>
-											</div>
-										</td>
-										<td class="text-end d-none d-md-table-cell">
-											<div class="cashpickup-statement-flow">
 												<?php if($statementCredit > 0): ?><div class="cashpickup-statement-flow-line text-primary"><span><i class="fa-solid fa-circle-plus" aria-hidden="true"></i> Credit</span><strong><?=number_format($statementCredit, 2)?></strong></div><?php endif; ?>
 												<?php if($statementRepayment > 0): ?><div class="cashpickup-statement-flow-line text-success"><span><i class="fa-solid fa-rotate-left" aria-hidden="true"></i> Repayment</span><strong><?=number_format($statementRepayment, 2)?></strong></div><?php endif; ?>
-												<?php if($statementCredit <= 0 && $statementRepayment <= 0): ?><span class="text-body-secondary">—</span><?php endif; ?>
+												<?php if($statementReceived <= 0 && $statementPayout <= 0 && $statementCredit <= 0 && $statementRepayment <= 0): ?><span class="text-body-secondary">—</span><?php endif; ?>
 											</div>
 										</td>
 										<td class="text-end cashpickup-statement-balance <?=($statementBalance < 0) ? 'text-danger' : ''?>"><?=number_format($statementBalance, 2)?></td>
@@ -1404,18 +1523,21 @@
 		</div>
 
 		<?php if($customerApproved): ?>
+		<?php if($canWithdraw || $canAssignPayout): ?>
 		<!-- ===== Cumulative Withdrawal ===== -->
 		<div class="tab-pane fade" id="withdraw-section" role="tabpanel" aria-labelledby="withdraw-tab" tabindex="0">
 			<div class="card border-0 shadow-sm">
 				<div class="card-header d-flex align-items-center justify-content-between">
 					<div>
-						<strong>Withdraw from Cumulative Balance</strong>
-						<div class="small text-muted">Withdraw against the customer's total balance. The amount is allocated FIFO across their unpaid receive records.</div>
+						<strong><?=$canWithdraw ? 'Withdraw from Cumulative Balance' : 'Payout assignments'?></strong>
+						<div class="small text-muted"><?=$canWithdraw ? "Withdraw against the customer's total balance. The amount is allocated FIFO across their unpaid receive records." : "Assign customer balance to eligible agents for payout."?></div>
 					</div>
-					<div class="small">Available to withdraw: <span class="fw-bold <?=((float)$withdrawAvailable < 0) ? 'text-danger' : 'text-success'?>">GH&#8373; <?=number_format((float)$withdrawAvailable, 2)?></span></div>
+					<?php if($canWithdraw): ?>
+						<div class="small">Available to withdraw: <span class="fw-bold <?=((float)$withdrawAvailable < 0) ? 'text-danger' : 'text-success'?>">GH&#8373; <?=number_format((float)$withdrawAvailable, 2)?></span></div>
+					<?php endif; ?>
 				</div>
 				<div class="card-body">
-					<?php if($isManagerOrAdmin): ?>
+					<?php if($canAssignPayout): ?>
 						<div class="card border mb-4">
 							<div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
 								<strong><i class="fa fa-user-check me-1"></i> Payout assignments</strong>
@@ -1425,7 +1547,7 @@
 								<form method="post" action="<?=ROOT?>/<?=$admin_route?>/<?=$plugin_route?>/customer-assignment/<?=esc((string)$customerId)?>" class="row g-2 align-items-end mb-3">
 									<?=csrf()?>
 									<input type="hidden" name="customer_id" value="<?=esc((string)$customerId)?>">
-									<div class="col-12 col-md-5">
+									<div class="col-12 col-md-4">
 										<label class="form-label">Assign to</label>
 										<select name="assigned_user_id" class="form-select" required>
 											<option value="">Select an eligible user</option>
@@ -1434,9 +1556,13 @@
 											<?php endforeach; ?>
 										</select>
 									</div>
-									<div class="col-12 col-md-4">
+									<div class="col-12 col-md-3">
 										<label class="form-label">Amount (GH&#8373;)</label>
 										<input type="number" name="amount" class="form-control" min="0.01" step="0.01" max="<?=esc(number_format((float)$unassignedBalance, 2, '.', ''))?>" required>
+									</div>
+									<div class="col-12 col-md-2">
+										<label class="form-label">Payout charge (GH&#8373;)</label>
+										<input type="number" name="pickup_charge" class="form-control" min="0" step="0.01" value="0.00" required>
 									</div>
 									<div class="col-12 col-md-3">
 										<button type="submit" class="btn btn-primary w-100" <?=empty($assignmentUsers) || $unassignedBalance <= 0.00001 ? 'disabled' : ''?>>
@@ -1446,15 +1572,15 @@
 								</form>
 								<div class="table-responsive">
 									<table class="table table-sm align-middle mb-0">
-										<thead><tr><th>Assigned user</th><th>Assigned</th><th>Used</th><th>Remaining</th><th>Status</th><th class="text-end">Action</th></tr></thead>
+										<thead><tr><th>Assigned user</th><th>Assigned</th><th>Payout charge</th><th>Used</th><th>Remaining</th><th>Status</th><th class="text-end">Action</th></tr></thead>
 										<tbody>
 											<?php
-												$visibleAssignments = array_filter($customerAssignments, static function($assignment) use ($isManagerOrAdmin, $user_id) {
-													return $isManagerOrAdmin || (int)($assignment->assigned_user_id ?? 0) === $user_id;
+												$visibleAssignments = array_filter($customerAssignments, static function($assignment) use ($canAssignPayout, $user_id) {
+													return $canAssignPayout || (int)($assignment->assigned_user_id ?? 0) === $user_id;
 												});
 											?>
 											<?php if(empty($visibleAssignments)): ?>
-												<tr><td colspan="6" class="text-center text-muted">No payout assignments yet.</td></tr>
+												<tr><td colspan="7" class="text-center text-muted">No payout assignments yet.</td></tr>
 											<?php else: ?>
 												<?php foreach($visibleAssignments as $assignment): ?>
 													<?php
@@ -1478,6 +1604,7 @@
 															<div class="small text-body-secondary"><?=esc($assignedAt !== '' ? $assignedAt : 'Assignment time not recorded')?></div>
 														</td>
 														<td>GH&#8373; <?=number_format((float)($assignment->amount ?? 0), 2)?></td>
+														<td>GH&#8373; <?=number_format((float)($assignment->pickup_charge ?? 0), 2)?></td>
 														<td>GH&#8373; <?=number_format((float)($assignment->used_amount ?? 0), 2)?></td>
 														<td class="fw-semibold">GH&#8373; <?=number_format((float)($assignment->remaining_amount ?? 0), 2)?></td>
 														<td>
@@ -1505,14 +1632,15 @@
 								</div>
 							</div>
 						</div>
-					<?php elseif($viewerAssignedBalance > 0.00001): ?>
+					<?php elseif($canWithdraw && $viewerAssignedBalance > 0.00001): ?>
 						<div class="alert alert-info d-flex justify-content-between align-items-center">
 							<span><i class="fa fa-user-check me-1"></i> Your assigned payout balance</span>
 							<strong>GH&#8373; <?=number_format((float)$withdrawAvailable, 2)?></strong>
 						</div>
 					<?php endif; ?>
+					<?php if($canWithdraw): ?>
 					<?php if((float)$withdrawAvailable <= 0.00001): ?>
-						<div class="alert alert-warning mb-0"><?=$isManagerOrAdmin ? 'This customer has no available balance to withdraw.' : 'No payout balance is assigned to you for this customer.'?></div>
+						<div class="alert alert-warning mb-0"><?=$isOperationsManager ? 'This customer has no available balance to withdraw.' : 'No payout balance is assigned to you for this customer.'?></div>
 					<?php else: ?>
 					<form method="post" action="<?=ROOT?>/<?=$admin_route?>/<?=$plugin_route?>/customer_withdraw/<?=esc((string)$customerId)?>" id="cashpickupWithdrawForm">
 						<?=csrf()?>
@@ -1528,7 +1656,8 @@
 							</div>
 							<div class="col-12 col-md-4">
 								<label class="form-label">Pickup Charge (GH&#8373;)</label>
-								<input type="number" step="0.01" min="0" name="pickup_charge" value="0" class="form-control" id="withdrawCharge">
+								<input type="number" step="0.01" min="0" name="pickup_charge" value="0" class="form-control" id="withdrawCharge" <?=$isOperationsManager ? '' : 'readonly'?>>
+								<?php if(!$isOperationsManager): ?><small class="text-muted">Calculated from the payout charge assigned to you.</small><?php endif; ?>
 							</div>
 							<div class="col-12 col-md-4">
 								<label class="form-label">Payment Method <span class="text-danger">*</span></label>
@@ -1603,6 +1732,7 @@
 								<div class="modal-header"><h5 class="modal-title">Cash GHS Notes</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
 								<div class="modal-body table-responsive">
 									<div class="mb-2 small">Target: GH&#8373; <span id="wdGhsTarget" class="fw-bold">0.00</span></div>
+									<div id="wdGhsMismatch" class="alert alert-danger py-2 mb-2 d-none" role="alert" aria-live="polite"></div>
 									<table class="table table-sm">
 										<thead><tr><th>NOTE</th><th>COUNT</th><th>VOLUME</th></tr></thead>
 										<tbody>
@@ -1619,7 +1749,7 @@
 								<div class="modal-footer">
 									<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
 									<button type="button" class="btn btn-danger" id="wdGhsReset">Reset</button>
-									<button type="button" class="btn btn-primary" id="wdGhsConfirm">Confirm</button>
+									<button type="button" class="btn btn-primary" id="wdGhsConfirm" disabled>Confirm</button>
 								</div>
 							</div>
 						</div>
@@ -1632,6 +1762,7 @@
 								<div class="modal-header"><h5 class="modal-title">Cash CFA Notes</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
 								<div class="modal-body table-responsive">
 									<div class="mb-2 small">Target CFA: <span id="wdCfaTarget" class="fw-bold">0</span> (from GH&#8373; <span id="wdCfaGhs">0.00</span> @ selling rate <?=number_format((float)$cfaRates['selling_rate'], 2)?>)</div>
+									<div id="wdCfaMismatch" class="alert alert-danger py-2 mb-2 d-none" role="alert" aria-live="polite"></div>
 									<table class="table table-sm">
 										<thead><tr><th>NOTE</th><th>COUNT</th><th>VOLUME</th></tr></thead>
 										<tbody>
@@ -1648,7 +1779,7 @@
 								<div class="modal-footer">
 									<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
 									<button type="button" class="btn btn-danger" id="wdCfaReset">Reset</button>
-									<button type="button" class="btn btn-primary" id="wdCfaConfirm">Confirm</button>
+									<button type="button" class="btn btn-primary" id="wdCfaConfirm" disabled>Confirm</button>
 								</div>
 							</div>
 						</div>
@@ -1660,6 +1791,8 @@
 							var amount = document.getElementById('withdrawAmount');
 							var charge = document.getElementById('withdrawCharge');
 							var sellingRate = <?=json_encode((float)$cfaRates['selling_rate'])?>;
+							var isOperationsManager = <?=$isOperationsManager ? 'true' : 'false'?>;
+							var chargeAssignments = <?=json_encode($viewerChargeAssignments, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)?>;
 							if(!pm) return;
 
 							var blocks = function(){ return document.querySelectorAll('.withdraw-method-block'); };
@@ -1676,12 +1809,30 @@
 								var c = parseFloat(charge && charge.value) || 0;
 								return Math.max(0, a - c);
 							};
+							var updateAssignedCharge = function(){
+								if(isOperationsManager || !charge || !amount) return;
+								var remaining = Math.max(0, parseFloat(amount.value) || 0);
+								var totalCharge = 0;
+								chargeAssignments.forEach(function(assignment){
+									if(remaining <= 0.00001) return;
+									var assignedAmount = parseFloat(assignment.amount) || 0;
+									var available = parseFloat(assignment.remaining_amount) || 0;
+									var take = Math.min(available, remaining);
+									if(assignedAmount > 0 && take > 0){
+										var prorated = (parseFloat(assignment.pickup_charge) || 0) * take / assignedAmount;
+										totalCharge += Math.floor((prorated + 0.000000001) * 10) / 10;
+										remaining = Math.max(0, remaining - take);
+									}
+								});
+								charge.value = totalCharge.toFixed(1);
+							};
 
 							// GHS calculator
 							var ghsModal = document.getElementById('withdrawDenosGhsModal');
 							function updateGhsTarget(){
 								var t = document.getElementById('wdGhsTarget');
 								if(t) t.textContent = payable().toFixed(2);
+								validateGhs(recomputeGhs());
 							}
 							function recomputeGhs(){
 								var tc = 0, tv = 0, rows = [];
@@ -1696,19 +1847,39 @@
 								document.getElementById('wdGhsTotalVolume').value = tv.toFixed(2);
 								return {tc: tc, tv: tv, rows: rows};
 							}
-							document.querySelectorAll('.wd-ghs-count').forEach(function(inp){ inp.addEventListener('input', recomputeGhs); });
+							function validateGhs(result){
+								var targetMinor = Math.round(payable() * 100);
+								var totalMinor = Math.round(result.tv * 100);
+								var valid = totalMinor === targetMinor && (targetMinor === 0 || result.tc > 0);
+								var button = document.getElementById('wdGhsConfirm');
+								var error = document.getElementById('wdGhsMismatch');
+								if(button) button.disabled = !valid;
+								if(error){
+									error.textContent = result.tc === 0
+										? 'Enter notes totaling GHS ' + (targetMinor / 100).toFixed(2) + ' to enable Confirm.'
+										: 'Entered notes total GHS ' + result.tv.toFixed(2) + ', but the target is GHS ' + (targetMinor / 100).toFixed(2) + '. Adjust the note counts to match exactly.';
+									error.classList.toggle('d-none', valid);
+								}
+								return valid;
+							}
+							document.querySelectorAll('.wd-ghs-count').forEach(function(inp){ inp.addEventListener('input', updateGhsTarget); });
 							document.getElementById('wdGhsReset').addEventListener('click', function(){
 								document.querySelectorAll('.wd-ghs-count').forEach(function(inp){ inp.value = ''; });
-								recomputeGhs();
+								updateGhsTarget();
 							});
 							document.getElementById('wdGhsConfirm').addEventListener('click', function(){
 								var r = recomputeGhs();
+								if(!validateGhs(r)) return;
 								document.getElementById('withdrawDenosJson').value = JSON.stringify(r.rows);
 								var sum = document.getElementById('withdrawGhsDenosSummary');
 								if(sum) sum.textContent = r.rows.length ? ('GHS ' + r.tv.toFixed(2) + ' across ' + r.tc + ' notes') : 'No denominations entered.';
 								bootstrap.Modal.getOrCreateInstance(ghsModal).hide();
 							});
-							if(amount) amount.addEventListener('input', updateGhsTarget);
+							if(amount) amount.addEventListener('input', function(){
+								updateAssignedCharge();
+								updateGhsTarget();
+								updateCfaTarget();
+							});
 							if(charge) charge.addEventListener('input', updateGhsTarget);
 
 							// CFA calculator
@@ -1724,6 +1895,7 @@
 								var gh = document.getElementById('wdCfaGhs'); if(gh) gh.textContent = payable().toFixed(2);
 								var disp = document.getElementById('withdrawCfaAmountDisplay'); if(disp) disp.value = cfa;
 								document.getElementById('withdrawCfaAmount').value = cfa;
+								validateCfa(recomputeCfa());
 							}
 							function recomputeCfa(){
 								var tc = 0, tv = 0, rows = [];
@@ -1738,28 +1910,45 @@
 								document.getElementById('wdCfaTotalVolume').value = tv;
 								return {tc: tc, tv: tv, rows: rows};
 							}
-							document.querySelectorAll('.wd-cfa-count').forEach(function(inp){ inp.addEventListener('input', recomputeCfa); });
+							function validateCfa(result){
+								var target = cfaFromGhs();
+								var valid = Math.round(result.tv) === target && (target === 0 || result.tc > 0);
+								var button = document.getElementById('wdCfaConfirm');
+								var error = document.getElementById('wdCfaMismatch');
+								if(button) button.disabled = !valid;
+								if(error){
+									error.textContent = result.tc === 0
+										? 'Enter notes totaling ' + target + ' CFA to enable Confirm.'
+										: 'Entered notes total ' + result.tv + ' CFA, but the target is ' + target + ' CFA. Adjust the note counts to match exactly.';
+									error.classList.toggle('d-none', valid);
+								}
+								return valid;
+							}
+							document.querySelectorAll('.wd-cfa-count').forEach(function(inp){ inp.addEventListener('input', updateCfaTarget); });
 							document.getElementById('wdCfaReset').addEventListener('click', function(){
 								document.querySelectorAll('.wd-cfa-count').forEach(function(inp){ inp.value = ''; });
-								recomputeCfa();
+								updateCfaTarget();
 							});
 							document.getElementById('wdCfaConfirm').addEventListener('click', function(){
 								var r = recomputeCfa();
+								if(!validateCfa(r)) return;
 								document.getElementById('withdrawCfaDenosJson').value = JSON.stringify(r.rows);
 								var sum = document.getElementById('withdrawCfaDenosSummary');
 								if(sum) sum.textContent = r.rows.length ? (r.tv + ' CFA across ' + r.tc + ' notes') : 'No CFA denominations entered.';
 								bootstrap.Modal.getOrCreateInstance(cfaModal).hide();
 							});
-							if(amount) amount.addEventListener('input', updateCfaTarget);
 							if(charge) charge.addEventListener('input', updateCfaTarget);
 
+							updateAssignedCharge();
 							sync();
 						})();
 					</script>
 					<?php endif; ?>
+					<?php endif; ?>
 				</div>
 			</div>
 		</div>
+		<?php endif; ?>
 
 		<!-- ===== Customer-to-Customer Transfer ===== -->
 		<div class="tab-pane fade" id="transfer-section" role="tabpanel" aria-labelledby="transfer-tab" tabindex="0">

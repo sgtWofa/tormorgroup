@@ -1,27 +1,20 @@
 <?php
 
 $cashpickup = new \Cashpickups\Cashpickup;
+require_once plugin_path('helpers/permissions.php');
 
 $session = get_session();
 $actorId = (int)($session->id ?? 0);
 
-// Admin or General Manager can deny
+// Admin, General Manager, or Operations Manager can reject.
 $canDeny = user_can('is_admin');
 if (!$canDeny) {
 	try {
 		$dbRole = new \Core\Database;
-		$gm = $dbRole->query(
-			"SELECT 1
-			 FROM user_roles_map urm
-			 JOIN user_roles ur ON ur.id = urm.role_id
-			 WHERE urm.disabled = 0
-			 AND urm.user_id = :uid
-			 AND LOWER(ur.role) IN ('general manager','general_manager','generalmanager','gm','is_general_manager')
-			 LIMIT 1",
-			['uid' => $actorId]
-		);
-		$canDeny = !empty($gm);
+		$canDeny = \CashpickupPermissions\is_general_manager($dbRole, $actorId)
+			|| \CashpickupPermissions\is_operations_manager($dbRole, $actorId);
 	} catch (\Throwable $e) {
+		error_log('[cashpickup] Rejection access check failed: ' . $e->getMessage());
 		$canDeny = false;
 	}
 }
@@ -32,28 +25,36 @@ if (!$canDeny) {
 }
 
 $postdata = $req->post();
+$returnCustomerId = (int)($postdata['customer_id'] ?? 0);
+$returnToView = (string)($postdata['return_to_view'] ?? '') === '1';
+$returnViewId = $returnToView ? (int)(URL(3) ?? 0) : 0;
+$denyReturnPath = $returnViewId > 0
+	? $admin_route.'/'.$plugin_route.'/view/'.$returnViewId
+	: ($returnCustomerId > 0
+		? $admin_route.'/'.$plugin_route.'/customer/'.$returnCustomerId
+		: $admin_route.'/'.$plugin_route);
 $csrf = csrf_verify($postdata);
 if (!$csrf) {
 	message_fail('Form expired');
-	redirect($admin_route.'/'.$plugin_route);
+	redirect($denyReturnPath);
 }
 
 $reason = trim((string)($postdata['denial_reason'] ?? ''));
 if ($reason === '') {
 	message_fail('Reason is required');
-	redirect($admin_route.'/'.$plugin_route);
+	redirect($denyReturnPath);
 }
 
 $id = (int)(URL(3) ?? 0);
 if ($id <= 0) {
 	message_fail('Invalid record');
-	redirect($admin_route.'/'.$plugin_route);
+	redirect($denyReturnPath);
 }
 
 $row = $cashpickup->first(['id' => $id]);
 if (empty($row)) {
 	message_fail('Record not found');
-	redirect($admin_route.'/'.$plugin_route);
+	redirect($denyReturnPath);
 }
 
 $side = strtolower(trim((string)($row->transaction_side ?? '')));
@@ -68,6 +69,18 @@ $cashpickup->update($id, [
 	'updated_by' => $actorId,
 	'date_updated' => date('Y-m-d H:i:s'),
 ]);
+if ($cashpickup->has_error) {
+	error_log('[cashpickup] Rejection update failed for transaction ' . $id . ': ' . $cashpickup->error);
+	message_fail('Unable to reject this cashpickup. Please try again.');
+	redirect($denyReturnPath);
+}
+$deniedRow = $cashpickup->first(['id' => $id]);
+if (empty($deniedRow)
+	|| strtolower(trim((string)($deniedRow->approval_status ?? ''))) !== 'denied'
+	|| trim((string)($deniedRow->denial_reason ?? '')) !== $reason) {
+	message_fail('Cashpickup rejection was not saved. Please refresh and try again.');
+	redirect($denyReturnPath);
+}
 
 if ($side === 'pay' && strtolower(trim((string)($row->credit_mode ?? ''))) === 'credit') {
 	$linkReceiveId = (int)($row->receive_id ?? 0);
@@ -184,4 +197,4 @@ if ($side === 'pay' && $prevApproval === 'approved') {
 }
 
 message_success('Cashpickup denied');
-redirect($admin_route.'/'.$plugin_route);
+redirect($denyReturnPath);

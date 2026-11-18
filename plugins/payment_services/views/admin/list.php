@@ -951,7 +951,7 @@ unset($exportQuery['url']);
             }
             if(!['cancelled', 'canceled', 'declined', 'rejected', 'reversed'].includes(status)){
                 actions.push(
-                    `<button type=\"button\" class=\"btn btn-sm btn-outline-danger js-direct-cancel\" data-id=\"${row.id}\" data-cancel-date=\"${String(row.date_created || '').slice(0, 10)}\" data-cancel-endpoint=\"${VIEW_BASE}/cancel\" data-cancel-label=\"Transaction #${row.id}\" aria-label=\"Cancel transaction #${row.id}\" title=\"Cancel transaction\"><i class=\"fa-solid fa-arrow-rotate-left\" aria-hidden=\"true\"></i></button>`
+                    `<button type=\"button\" class=\"btn btn-sm btn-outline-danger js-direct-cancel\" data-id=\"${row.id}\" data-cancel-endpoint=\"${VIEW_BASE}/cancel\" data-cancel-label=\"Transaction #${row.id}\" aria-label=\"Cancel transaction #${row.id}\" title=\"Cancel transaction\"><i class=\"fa-solid fa-arrow-rotate-left\" aria-hidden=\"true\"></i></button>`
                 );
             }
 
@@ -1188,4 +1188,4 @@ unset($exportQuery['url']);
 })();
 </script>
 <div class="d-none" data-direct-cancel-csrf><?=csrf()?></div>
-<script src="<?=ROOT?>/plugins/reversals/assets/direct-cancel.js?v=20261116-1"></script>
+<script src="<?=ROOT?>/plugins/reversals/assets/direct-cancel.js"></script>

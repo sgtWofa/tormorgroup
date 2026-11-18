@@ -14,12 +14,16 @@
 
 <?php
 $session = get_session();
-$userId = $session->id;
+$userId = (int)($session->id ?? 0);
+$isForcedPasswordChange = !empty($row)
+	&& $userId > 0
+	&& $userId === (int)($row->id ?? 0)
+	&& (int)($session->force_password_change ?? 0) === 1;
 
 ?>
 
 <?php if(!empty($row)):?>
-	<?php if(user_can('edit_profile') || $userId === $row->id):?>
+	<?php if(user_can('edit_profile') || $userId === (int)$row->id):?>
 
 			<form onsubmit="return validate_passwords(event)" method="post">
 				
@@ -27,7 +31,14 @@ $userId = $session->id;
 				
 				<?=csrf()?>
 
-				<h4 class=""><span><img src="<?=APP_LOGO2 ?? ''?>" style="cursor:pointer;width:100%;max-width:60px;max-height: 60px;object-fit: cover;"></span> Reset Password</h4>
+				<h4 class=""><span><img src="<?=APP_LOGO2 ?? ''?>" style="cursor:pointer;width:100%;max-width:60px;max-height: 60px;object-fit: cover;"></span> <?=$isForcedPasswordChange ? 'Change Password' : 'Reset Password'?></h4>
+
+				<?php if($isForcedPasswordChange): ?>
+					<div class="alert alert-warning col-12">Your password was reset by an administrator. Choose a new password before continuing.</div>
+				<?php endif; ?>
+				<?php if(!empty($errors['general'])): ?>
+					<div class="alert alert-danger col-12"><?=esc((string)$errors['general'])?></div>
+				<?php endif; ?>
 
 				<div class="text-center mb-3">
 					<img src="<?=get_image($row->image, $row->gender)?>" class="img-thumbnail rounded-circle" style="cursor:pointer;width:100%;max-width:100px;max-height: 100px;object-fit: cover;">
@@ -37,7 +48,7 @@ $userId = $session->id;
 
 				<div class="mb-3 col-md-12">
 				  <label for="new_password" class="form-label">New Password</label>
-				  <input name="new_password" value="<?=old_value('new_password','')?>" type="password" class="form-control" id="new_password" placeholder="Enter new password" required>
+				  <input name="new_password" type="password" class="form-control" id="new_password" placeholder="Enter new password" autocomplete="new-password" required>
 				
 					<?php if(!empty($errors['new_password'])):?>
 					  <small class="text-danger"><?=$errors['new_password']?></small>
@@ -46,7 +57,7 @@ $userId = $session->id;
 
 				<div class="mb-3 col-md-12">
 				  <label for="confirm_password" class="form-label">Confirm Password</label>
-				  <input name="confirm_password" value="<?=old_value('confirm_password','')?>" type="password" class="form-control" id="confirm_password" placeholder="Confirm new password" required>
+				  <input name="confirm_password" type="password" class="form-control" id="confirm_password" placeholder="Confirm new password" autocomplete="new-password" required>
 				
 					<?php if(!empty($errors['confirm_password'])):?>
 					  <small class="text-danger"><?=$errors['confirm_password']?></small>
@@ -54,13 +65,13 @@ $userId = $session->id;
 				</div>
 				
 				<div class="d-flex justify-content-between">
-					<a href="<?=ROOT?>/<?=$admin_route?>/profile/edit/<?=$row->id?>">
-						<button type="button" class="btn btn-primary">
+					<?php if(!$isForcedPasswordChange): ?>
+						<a href="<?=ROOT?>/<?=$admin_route?>/profile/edit/<?=$row->id?>" class="btn btn-primary">
 							<i class="fa-solid fa-chevron-left"></i> Back
-						</button>
-					</a>
+						</a>
+					<?php endif; ?>
 					<button type="submit" class="btn btn-danger">
-						<i class="fa-solid fa-save"></i> Reset Password
+						<i class="fa-solid fa-save"></i> <?=$isForcedPasswordChange ? 'Change Password' : 'Reset Password'?>
 					</button>
 				</div>
 			</div>

@@ -3,10 +3,9 @@
 /**
  * Cumulative customer withdrawal controller.
  *
- * Allows agents + managers/admins to withdraw against a customer's aggregate
- * balance (across all their receive records), not per-tracking-id. The
- * withdrawal amount is FIFO-allocated across the customer's oldest unpaid
- * receives, and a separate `pay` row is created per receive slice.
+ * Allows agents + operations managers to withdraw against a customer's aggregate
+ * balance (across all their receive records), not per-tracking-id. Each
+ * withdrawal is recorded as one `pay` row without a receive transaction link.
  *
  * Source is tagged as `customer_withdrawal` so the ledger can distinguish
  * these from legacy per-receive payouts and from customer-to-customer transfers.
@@ -15,15 +14,26 @@
 require_once plugin_path('helpers/customer-ledger.php');
 require_once plugin_path('helpers/transfer-allocation.php');
 require_once plugin_path('helpers/customer-assignment.php');
-
-if(!(user_can('view_cashpickup') || user_can('add_cashpickup') || user_can('is_manager') || user_can('is_admin'))){
-	message_fail('Access denied');
-	redirect($admin_route.'/'.$plugin_route.'/customers');
-}
+require_once plugin_path('helpers/permissions.php');
 
 $session = get_session();
 $actorId = (int)($session->id ?? 0);
 $customerId = (int)(URL(3) ?? ($req->post('customer_id') ?? 0));
+$isOperationsManager = false;
+try {
+	$db = new \Core\Database;
+	$isOperationsManager = \CashpickupPermissions\is_operations_manager($db, $actorId);
+	$canWithdraw = \CashpickupPermissions\can_withdraw_customer_payout($db, $actorId);
+} catch (\Throwable $e) {
+	error_log('[cashpickup] Customer withdrawal access check failed: ' . $e->getMessage());
+	message_fail('Unable to verify access. Please try again.');
+	redirect($admin_route.'/'.$plugin_route.'/customers');
+}
+if (!$canWithdraw) {
+	message_fail('Access denied. Only agents and operations managers can withdraw from customer balances.');
+	redirect($admin_route.'/'.$plugin_route.'/customers');
+}
+
 $amount = (float)($req->post('amount') ?? 0);
 $pickupCharge = (float)($req->post('pickup_charge') ?? 0);
 $paymentMethodRaw = strtolower(trim((string)($req->post('payment_method') ?? '')));
@@ -76,16 +86,6 @@ if($confirmedBy === ''){
 	redirect($admin_route.'/'.$plugin_route.'/customer/'.$customerId);
 }
 
-if($pickupCharge < 0){
-	$pickupCharge = 0;
-}
-
-$amountPaidOut = max(0.0, $amount - $pickupCharge);
-if($amountPaidOut <= 0 && $amount > 0){
-	$amountPaidOut = $amount;
-	$pickupCharge = 0;
-}
-
 $csrf = csrf_verify($req->post());
 if(!$csrf){
 	message_fail('Form expired.');
@@ -95,7 +95,6 @@ if(!$csrf){
 $transactionStarted = false;
 $insertedIds = [];
 try{
-	$db = new \Core\Database;
 	\CashpickupLedger\ensure_cashpickup_customer_schema($db);
 	\CashpickupLedger\ensure_cashpickup_columns($db);
 	\CashpickupLedger\ensure_cashpickup_credit_schema($db);
@@ -118,7 +117,7 @@ try{
 	// Check cumulative balance
 	$balance = \CashpickupLedger\fetch_customer_balance_metrics($db, $customerId);
 	$customerBalance = max(0.0, (float)($balance['balance'] ?? 0));
-	$isAssignmentPrivileged = user_can('is_manager') || user_can('is_admin');
+	$isAssignmentPrivileged = $isOperationsManager;
 	$assignedBalance = \CashpickupCustomerAssignment\get_remaining_amount($db, $customerId, $actorId);
 	$withdrawalLimit = $isAssignmentPrivileged ? $customerBalance : min($customerBalance, $assignedBalance);
 	if(($amount - $withdrawalLimit) > 0.00001){
@@ -128,13 +127,29 @@ try{
 		message_fail($limitMessage);
 		redirect($admin_route.'/'.$plugin_route.'/customer/'.$customerId);
 	}
+	$assignmentPlan = null;
+	if ($isAssignmentPrivileged) {
+		$pickupCharge = max(0.0, $pickupCharge);
+		$pickupCharge = floor(($pickupCharge + 0.000000001) * 10) / 10;
+	} else {
+		$assignmentPlan = \CashpickupCustomerAssignment\plan_allocation($db, $customerId, $actorId, $amount);
+		if (($assignmentPlan['shortfall'] ?? 0) > 0.00001) {
+			message_fail('Your assigned payout balance changed. Refresh and try again.');
+			redirect($admin_route.'/'.$plugin_route.'/customer/'.$customerId);
+		}
+	}
 
-	// FIFO allocation across unpaid receives
-	$allocation = \CashpickupLedger\compute_cumulative_withdrawal_allocation($db, $customerId, $amount);
-	if(empty($allocation['slices']) || ($allocation['shortfall'] ?? 0) > 0.00001){
-		message_fail('Unable to allocate withdrawal to customer receives. Balance may have changed.');
+	if (!$isAssignmentPrivileged) {
+		$pickupCharge = round(array_sum(array_map(
+			static fn(array $slice): float => (float)($slice['pickup_charge'] ?? 0),
+			$assignmentPlan['slices'] ?? []
+		)), 1);
+	}
+	if ($pickupCharge >= $amount && $pickupCharge > 0) {
+		message_fail('Payout charge must be less than the withdrawal amount.');
 		redirect($admin_route.'/'.$plugin_route.'/customer/'.$customerId);
 	}
+	$amountPaidOut = round($amount - $pickupCharge, 2);
 
 	// Approval workflow: same as add-controller.php
 	$isPrivileged = user_can('is_admin');
@@ -154,8 +169,7 @@ try{
 	} catch (\Throwable $e) {}
 	$approvalStatus = ($isPrivileged || $isGeneralManager) ? 'approved' : 'pending';
 
-	// CFA amount (only set for cash_cfa; zero otherwise). Hoisted here so it is
-	// always defined when the insert loop references it.
+	// CFA amount is zero unless the customer is paid in CFA.
 	$cfaAmount = 0.0;
 
 	// ===== STRICT CASHDRAWER / BALANCE VALIDATION (HARD BLOCK) =====
@@ -341,142 +355,120 @@ try{
 	if ($amount > $latestWithdrawalLimit + 0.00001) {
 		throw new \RuntimeException('The available customer payout balance changed. Available: GH₵ ' . number_format($latestWithdrawalLimit, 2) . '.');
 	}
-	$allocation = \CashpickupLedger\compute_cumulative_withdrawal_allocation($db, $customerId, $amount);
-	if (empty($allocation['slices']) || ($allocation['shortfall'] ?? 0) > 0.00001) {
-		throw new \RuntimeException('Unable to allocate withdrawal to customer receives. Balance may have changed.');
-	}
-
-	$payoutSlices = [];
-	if ($isAssignmentPrivileged) {
-		foreach ($allocation['slices'] as $slice) {
-			$payoutSlices[] = [
-				'receive_id' => (int)$slice['receive_id'],
-				'amount' => round((float)$slice['amount'], 2),
-				'customer_assignment_id' => null,
-			];
-		}
-	} else {
+	$assignmentPlan = null;
+	if (!$isAssignmentPrivileged) {
 		$assignmentPlan = \CashpickupCustomerAssignment\plan_allocation($db, $customerId, $actorId, $amount);
 		if (($assignmentPlan['shortfall'] ?? 0) > 0.00001) {
 			throw new \RuntimeException('Your assigned payout balance changed. Refresh and try again.');
 		}
-		$assignmentIndex = 0;
-		$assignmentRemaining = (float)($assignmentPlan['slices'][0]['amount'] ?? 0);
-		foreach ($allocation['slices'] as $receiveSlice) {
-			$receiveRemaining = round((float)$receiveSlice['amount'], 2);
-			while ($receiveRemaining > 0.00001) {
-				$currentAssignment = $assignmentPlan['slices'][$assignmentIndex] ?? null;
-				if (!$currentAssignment) {
-					throw new \RuntimeException('Unable to link withdrawal to its payout assignment.');
-				}
-				if ($assignmentRemaining <= 0.00001) {
-					$assignmentIndex++;
-					$assignmentRemaining = (float)($assignmentPlan['slices'][$assignmentIndex]['amount'] ?? 0);
-					continue;
-				}
-				$take = round(min($receiveRemaining, $assignmentRemaining), 2);
-				if ($take <= 0.00001) {
-					throw new \RuntimeException('Unable to prepare the assigned payout.');
-				}
-				$payoutSlices[] = [
-					'receive_id' => (int)$receiveSlice['receive_id'],
-					'amount' => $take,
-					'customer_assignment_id' => (int)$currentAssignment['assignment_id'],
-				];
-				$receiveRemaining = round(max(0.0, $receiveRemaining - $take), 2);
-				$assignmentRemaining = round(max(0.0, $assignmentRemaining - $take), 2);
-			}
+		$lockedCharge = round(array_sum(array_map(
+			static fn(array $slice): float => (float)($slice['pickup_charge'] ?? 0),
+			$assignmentPlan['slices'] ?? []
+		)), 1);
+		if (abs($lockedCharge - $pickupCharge) > 0.00001) {
+			throw new \RuntimeException('The assigned payout charge changed. Refresh and try again.');
 		}
 	}
-	if ($pickupCharge > 0 && !empty($payoutSlices)) {
-		usort($payoutSlices, static function(array $left, array $right): int {
-			return (float)$right['amount'] <=> (float)$left['amount'];
-		});
-		if ($pickupCharge >= (float)$payoutSlices[0]['amount'] - 0.00001) {
-			throw new \RuntimeException('Pickup charge must be less than the largest payout allocation. Reduce the charge and try again.');
-		}
+	if ($pickupCharge >= $amount && $pickupCharge > 0) {
+		throw new \RuntimeException('The payout charge exceeds the withdrawal amount.');
 	}
 
-	// --- Insert pay rows per FIFO slice and assignment slice ---
+	// --- Insert one payout row for the full customer withdrawal ---
 	$now = date('Y-m-d H:i:s');
-	foreach ($payoutSlices as $sliceIndex => $slice) {
-		$sliceAmount = (float)$slice['amount'];
-		$receiveId = (int)$slice['receive_id'];
-
-		// Pickup charge goes on the first slice only; remaining slices have no charge.
-		$isFirstSlice = $sliceIndex === 0;
-		$sliceCharge = $isFirstSlice ? $pickupCharge : 0.0;
-		$slicePaidOut = max(0.0, $sliceAmount - $sliceCharge);
-
-		$rowId = (int)floor(microtime(true) * 1000000);
-		$insertData = [
-			'id' => $rowId,
-			'transaction_side' => 'pay',
-			'date' => date('Y-m-d'),
-			'source' => 'customer_withdrawal',
-			'account_paid_to' => $paymentMethod === 'transfer_bank' ? $accountPaidTo : '',
-			'sender_details' => (string)($customer->full_name ?? ''),
-			'phone_number' => (string)($customer->phone_number ?? ''),
-			'tracking_id' => 'WD-' . $rowId,
-			'idcard_photo' => $idcardPhoto,
-			'customer_photo' => $customerPhoto,
-			'pickup_person_idcard' => $confirmedBy,
-			'pickup_person_signature' => '',
-			'pickup_person_phone' => (string)($customer->phone_number ?? ''),
-			'amount_involved' => $sliceAmount,
-			'payment_method' => $paymentMethod,
-			'pickup_charge' => $sliceCharge,
-			'amount_paid_out' => $slicePaidOut,
-			'amount_transferred' => $sliceAmount,
-			'receive_id' => $receiveId,
-			'pay_type' => 'part',
-			'amount_requested' => $sliceAmount,
-			'customer_assignment_id' => $slice['customer_assignment_id'],
-			'denos_json' => ($isFirstSlice && $paymentMethod === 'cash_ghs') ? $denosJson : '',
-			'cfa_amount' => ($isFirstSlice && $paymentMethod === 'cash_cfa') ? $cfaAmount : 0,
-			'cfa_denos_json' => ($isFirstSlice && $paymentMethod === 'cash_cfa') ? $cfaDenosJson : '',
-			'customer_id' => $customerId,
-			'customer_id_type' => (string)($customer->id_type ?? ''),
-			'customer_id_number' => (string)($customer->id_number ?? ''),
-			'customer_location' => (string)($customer->location ?? ''),
-			'payout_channel' => $paymentMethod === 'transfer_telcos' ? $payoutChannel : ($paymentMethod === 'transfer_bank' ? $accountPaidTo : ''),
-			'assigned_user_id' => $actorId,
-			'approved_by' => $actorId,
-			'approved_at' => $now,
-			'confirmed_by' => $confirmedBy,
-			'notes' => $notes,
-			'approval_status' => $approvalStatus,
-			'transaction_status' => 'Approved',
-			'created_by' => $actorId,
-			'updated_by' => null,
-			'disabled' => 0,
-			'deleted' => 0,
-			'date_created' => $now,
-			'date_updated' => null,
-			'date_deleted' => null,
-		];
-
-		$cols = array_keys($insertData);
-		$sql = "INSERT INTO cashpickups (".implode(',', $cols).") VALUES (:".implode(',:', $cols).")";
-
-		// Duplicate PK retry (mirrors add-controller pattern)
-		$insertOk = false;
-		for ($attempt = 0; $attempt < 3; $attempt++) {
-			try {
-				$insertData['id'] = (int)floor(microtime(true) * 1000000);
-				$insertData['tracking_id'] = 'WD-' . $insertData['id'];
-				$db->query($sql, $insertData);
-				if ($db->has_error) {
-					throw new \RuntimeException('Unable to save a payout allocation: ' . $db->error);
-				}
-				$insertedIds[] = $insertData['id'];
-				$insertOk = true;
-				break;
-			} catch (\Throwable $insertErr) {
-				if ($attempt >= 2) {
-					throw $insertErr;
-				}
-				usleep(80000);
+	$insertData = [
+		'id' => 0,
+		'transaction_side' => 'pay',
+		'date' => date('Y-m-d'),
+		'source' => 'customer_withdrawal',
+		'account_paid_to' => $paymentMethod === 'transfer_bank' ? $accountPaidTo : '',
+		'sender_details' => (string)($customer->full_name ?? ''),
+		'phone_number' => (string)($customer->phone_number ?? ''),
+		'tracking_id' => '',
+		'idcard_photo' => $idcardPhoto,
+		'customer_photo' => $customerPhoto,
+		'pickup_person_idcard' => $confirmedBy,
+		'pickup_person_signature' => '',
+		'pickup_person_phone' => (string)($customer->phone_number ?? ''),
+		'amount_involved' => $amount,
+		'payment_method' => $paymentMethod,
+		'pickup_charge' => $pickupCharge,
+		'amount_paid_out' => $amountPaidOut,
+		'amount_transferred' => $amount,
+		'receive_id' => null,
+		'pay_type' => 'part',
+		'amount_requested' => $amount,
+		'customer_assignment_id' => null,
+		'denos_json' => $paymentMethod === 'cash_ghs' ? $denosJson : '',
+		'cfa_amount' => $paymentMethod === 'cash_cfa' ? $cfaAmount : 0,
+		'cfa_denos_json' => $paymentMethod === 'cash_cfa' ? $cfaDenosJson : '',
+		'customer_id' => $customerId,
+		'customer_id_type' => (string)($customer->id_type ?? ''),
+		'customer_id_number' => (string)($customer->id_number ?? ''),
+		'customer_location' => (string)($customer->location ?? ''),
+		'payout_channel' => $paymentMethod === 'transfer_telcos' ? $payoutChannel : ($paymentMethod === 'transfer_bank' ? $accountPaidTo : ''),
+		'assigned_user_id' => $actorId,
+		'approved_by' => $actorId,
+		'approved_at' => $now,
+		'confirmed_by' => $confirmedBy,
+		'notes' => $notes,
+		'approval_status' => $approvalStatus,
+		'transaction_status' => 'Approved',
+		'created_by' => $actorId,
+		'updated_by' => null,
+		'disabled' => 0,
+		'deleted' => 0,
+		'date_created' => $now,
+		'date_updated' => null,
+		'date_deleted' => null,
+	];
+	$cols = array_keys($insertData);
+	$sql = "INSERT INTO cashpickups (".implode(',', $cols).") VALUES (:".implode(',:', $cols).")";
+	$inserted = false;
+	for ($attempt = 0; $attempt < 5; $attempt++) {
+		try {
+			$candidateId = random_int(100000000000000000, 999999999999999999);
+			$existingId = $db->query(
+				"SELECT id FROM cashpickups WHERE id = :id LIMIT 1",
+				['id' => $candidateId]
+			);
+			if ($db->has_error) {
+				throw new \RuntimeException('Unable to verify a unique customer payout ID.');
+			}
+			if (!empty($existingId)) {
+				continue;
+			}
+			$insertData['id'] = $candidateId;
+			$insertData['tracking_id'] = 'WD-' . $insertData['id'];
+			$db->query($sql, $insertData);
+			if ($db->has_error || $db->affected_rows !== 1) {
+				throw new \RuntimeException('Unable to save the customer payout: ' . $db->error);
+			}
+			$insertedIds[] = $insertData['id'];
+			$inserted = true;
+			break;
+		} catch (\Throwable $insertErr) {
+			if ($attempt >= 4) {
+				throw $insertErr;
+			}
+			usleep(80000);
+		}
+	}
+	if (!$inserted) {
+		throw new \RuntimeException('Unable to save the customer payout.');
+	}
+	if (!$isAssignmentPrivileged) {
+		foreach (($assignmentPlan['slices'] ?? []) as $assignmentSlice) {
+			$db->query(
+				"INSERT INTO cashpickup_customer_assignment_payouts (payout_id, assignment_id, amount)
+				 VALUES (:payout_id, :assignment_id, :amount)",
+				[
+					'payout_id' => (int)$insertData['id'],
+					'assignment_id' => (int)($assignmentSlice['assignment_id'] ?? 0),
+					'amount' => (float)($assignmentSlice['amount'] ?? 0),
+				]
+			);
+			if ($db->has_error || $db->affected_rows !== 1) {
+				throw new \RuntimeException('Unable to link the payout to its assigned balance.');
 			}
 		}
 	}
@@ -485,7 +477,7 @@ try{
 	}
 	$transactionStarted = false;
 
-	// Commission row if there is a charge (first slice only)
+	// Commission row if there is a charge.
 	if ($pickupCharge > 0 && !empty($insertedIds)) {
 		try {
 			$commissionDb = new \Core\Database;
@@ -577,8 +569,7 @@ try{
 		}
 	}
 
-	$sliceCount = count($allocation['slices']);
-	message_success('Cumulative withdrawal of GH₵ ' . number_format($amount, 2) . ' recorded across ' . $sliceCount . ' receive record' . ($sliceCount > 1 ? 's' : '') . '.');
+	message_success('Customer payout of GH₵ ' . number_format($amount, 2) . ' recorded.');
 	redirect($admin_route.'/'.$plugin_route.'/customer/'.$customerId);
 
 }catch(\Throwable $e){

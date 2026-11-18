@@ -6,7 +6,6 @@ $transferHelperPath = realpath(__DIR__ . '/../helpers/transfer-allocation.php');
 if ($transferHelperPath && file_exists($transferHelperPath)) {
 	require_once $transferHelperPath;
 }
-require_once plugin_path('helpers/customer-ledger.php');
 
 if(!(user_can('is_manager') || user_can('is_admin'))){
 	message_fail('Access denied');
@@ -44,14 +43,6 @@ if (!$canTransferPendingCreditPayout && $approvalStatus !== '' && $approvalStatu
 if($side !== 'receive'){
 	message_fail('Only receive cashpickups can be transferred');
 	redirect($admin_route.'/'.$plugin_route.'/view/'.$id);
-}
-if (!$isCreditPayout) {
-	$customerDb = new \Core\Database;
-	$customerProfileId = \CashpickupLedger\find_customer_id_for_cashpickup($customerDb, $row);
-	if ($customerProfileId > 0) {
-		redirect($admin_route . '/' . $plugin_route . '/customer/' . $customerProfileId . '#withdraw-section');
-		exit;
-	}
 }
 
 $targetUserId = (int)($req->post('assigned_user_id') ?? 0);
@@ -657,29 +648,6 @@ try{
 		}
 		if (!$db->commit()) {
 			throw new \RuntimeException('Unable to complete the reassignment.');
-		}
-
-		$whatsappHelper = realpath(__DIR__ . '/../../backoffice/helpers/whatsapp-notifications.php');
-		if ($whatsappHelper && file_exists($whatsappHelper)) {
-			require_once $whatsappHelper;
-		}
-		if (function_exists('backoffice_whatsapp_notify_transaction')) {
-			backoffice_whatsapp_notify_transaction([
-				'type' => 'Cash Pickup',
-				'id' => (int)$id,
-				'status' => 'Action required',
-				'notification_label' => 'ACTION REQUIRED',
-				'recipient_id' => (int)$targetUserId,
-				'recipient_label' => 'assigned Cash Pickup user',
-				'details' => [
-					'Amount assigned' => 'GHS ' . number_format((float)$transferAmount, 2),
-					'Customer' => trim((string)($row->customer_name ?? '')),
-					'Tracking' => trim((string)($row->tracking_id ?? '')),
-				],
-				'view_url' => ROOT . '/admin/cashpickup/view/' . (int)$id,
-			]);
-		} else {
-			error_log('[cashpickup assignment] WhatsApp notification helper is unavailable for transaction #' . (int)$id);
 		}
 
 		message_success('Cashpickup assigned');

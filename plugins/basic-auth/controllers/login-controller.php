@@ -28,6 +28,22 @@
 
 				if(password_verify($postdata['password'], $row->password))
 				{
+					if ((int)($row->force_password_change ?? 0) === 1) {
+						$ses->auth($row);
+						unset($_SESSION['post_login_redirect']);
+						$username = trim((string)($row->first_name ?? '') . ' ' . (string)($row->last_name ?? ''));
+						$log->insert([
+							'table_name' => 'users',
+							'action' => 'logged in',
+							'user_id' => $row->id,
+							'user_name' => $username,
+							'description' => $username . ' logged in and must change the reset password.',
+							'date_created' => date('Y-m-d H:i:s'),
+						]);
+						redirect('admin/profile/resetpassword/' . (int)$row->id);
+						exit;
+					}
+
 					$postLoginRedirect = trim((string)($_SESSION['post_login_redirect'] ?? ''));
 					unset($_SESSION['post_login_redirect']);
 					if ($postLoginRedirect !== '' && (strpos($postLoginRedirect, '/') === 0 || preg_match('/^[a-zA-Z0-9_-]+(?:\/|$)/', $postLoginRedirect))) {

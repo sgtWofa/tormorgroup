@@ -421,24 +421,109 @@ function search_customers(Database $db, string $term, int $limit = 10, bool $app
 	}
 
 	$limit = $limit > 0 ? min(50, $limit) : 10;
+	$fetchLimit = min(250, $limit * 5);
 	$params = ['term' => '%' . $term . '%'];
-	$where = ["deleted = 0"];
+	$where = ["c.deleted = 0"];
 	if ($approvedOnly) {
-		$where[] = "(approval_status IS NULL OR approval_status = '' OR LOWER(approval_status) = 'approved')";
+		$where[] = "(c.approval_status IS NULL OR c.approval_status = '' OR LOWER(c.approval_status) = 'approved')";
 	}
-	$where[] = "(COALESCE(full_name,'') LIKE :term OR COALESCE(phone_number,'') LIKE :term OR COALESCE(id_number,'') LIKE :term)";
+	$where[] = "(COALESCE(c.full_name,'') LIKE :term OR COALESCE(c.phone_number,'') LIKE :term OR COALESCE(c.id_number,'') LIKE :term)";
+	$duplicateApprovalFilter = $approvedOnly
+		? "AND (duplicate_customer.approval_status IS NULL OR duplicate_customer.approval_status = '' OR LOWER(duplicate_customer.approval_status) = 'approved')"
+		: '';
+	$where[] = "NOT EXISTS (
+		SELECT 1
+		FROM cashpickup_customers duplicate_customer
+		WHERE duplicate_customer.deleted = 0
+		{$duplicateApprovalFilter}
+		AND duplicate_customer.id <> c.id
+		AND (
+			(
+				TRIM(COALESCE(duplicate_customer.id_number,'')) <> ''
+				AND LOWER(TRIM(duplicate_customer.id_number)) = LOWER(TRIM(c.id_number))
+			)
+			OR (
+				TRIM(COALESCE(duplicate_customer.phone_number,'')) <> ''
+				AND TRIM(duplicate_customer.phone_number) = TRIM(c.phone_number)
+				AND TRIM(COALESCE(duplicate_customer.full_name,'')) <> ''
+				AND LOWER(TRIM(duplicate_customer.full_name)) = LOWER(TRIM(c.full_name))
+			)
+		)
+		AND (
+			CASE
+				WHEN LOWER(COALESCE(duplicate_customer.approval_status,'approved')) IN ('pending','draft') THEN 0
+				ELSE 1
+			END
+			<
+			CASE
+				WHEN LOWER(COALESCE(c.approval_status,'approved')) IN ('pending','draft') THEN 0
+				ELSE 1
+			END
+			OR (
+				(
+					CASE
+						WHEN LOWER(COALESCE(duplicate_customer.approval_status,'approved')) IN ('pending','draft') THEN 0
+						ELSE 1
+					END
+				) = (
+					CASE
+						WHEN LOWER(COALESCE(c.approval_status,'approved')) IN ('pending','draft') THEN 0
+						ELSE 1
+					END
+				)
+				AND duplicate_customer.id < c.id
+			)
+		)
+	)";
 
-	return $db->query(
-		"SELECT id, full_name, phone_number, id_type, id_number, location, approval_status
-		 FROM cashpickup_customers
+	$rows = $db->query(
+		"SELECT c.id, c.full_name, c.phone_number, c.id_type, c.id_number, c.location, c.approval_status
+		 FROM cashpickup_customers c
 		 WHERE " . implode(' AND ', $where) . "
 		 ORDER BY
-		 	CASE WHEN COALESCE(full_name,'') LIKE :term THEN 0 ELSE 1 END,
-		 	full_name ASC,
-		 	id DESC
-		 LIMIT {$limit}",
+		 	CASE WHEN COALESCE(c.full_name,'') LIKE :term THEN 0 ELSE 1 END,
+		 	c.full_name ASC,
+		 	c.id ASC
+		 LIMIT {$fetchLimit}",
 		$params
 	) ?: [];
+
+	$uniqueRows = [];
+	$seenIdentities = [];
+	foreach ($rows as $row) {
+		$idNumber = strtolower(trim((string)($row->id_number ?? '')));
+		$phone = trim((string)($row->phone_number ?? ''));
+		$name = strtolower(trim((string)($row->full_name ?? '')));
+		$identityKeys = [];
+		if ($idNumber !== '') {
+			$identityKeys[] = 'id-number:' . $idNumber;
+		}
+		if ($phone !== '' && $name !== '') {
+			$identityKeys[] = 'phone-name:' . $phone . '|' . $name;
+		}
+		$identityKeys[] = 'customer-id:' . (int)($row->id ?? 0);
+
+		$isDuplicate = false;
+		foreach ($identityKeys as $identityKey) {
+			if (isset($seenIdentities[$identityKey])) {
+				$isDuplicate = true;
+				break;
+			}
+		}
+		if ($isDuplicate) {
+			continue;
+		}
+		foreach ($identityKeys as $identityKey) {
+			$seenIdentities[$identityKey] = true;
+		}
+
+		$uniqueRows[] = $row;
+		if (count($uniqueRows) >= $limit) {
+			break;
+		}
+	}
+
+	return $uniqueRows;
 }
 
 function upsert_customer(array $payload, int $actorId, ?Database $db = null, array $options = []): ?array
@@ -528,7 +613,24 @@ function upsert_customer(array $payload, int $actorId, ?Database $db = null, arr
 		];
 	}
 
-	$newId = (int)floor(microtime(true) * 1000000);
+	$newId = 0;
+	for ($attempt = 0; $attempt < 5; $attempt++) {
+		$candidateId = random_int(100000000000000000, 999999999999999999);
+		$existingId = $db->query(
+			"SELECT id FROM cashpickup_customers WHERE id = :id LIMIT 1",
+			['id' => $candidateId]
+		);
+		if ($db->has_error) {
+			throw new \RuntimeException('Unable to verify a unique customer ID.');
+		}
+		if (empty($existingId)) {
+			$newId = $candidateId;
+			break;
+		}
+	}
+	if ($newId <= 0) {
+		throw new \RuntimeException('Unable to generate a unique customer ID.');
+	}
 	$db->query(
 		"INSERT INTO cashpickup_customers (id, full_name, phone_number, id_type, id_number, location, created_by, date_created, approval_status, approved_by, approved_at)
 		 VALUES (:id, :full_name, :phone_number, :id_type, :id_number, :location, :created_by, :date_created, :approval_status, :approved_by, :approved_at)",
@@ -546,6 +648,9 @@ function upsert_customer(array $payload, int $actorId, ?Database $db = null, arr
 			'approved_at' => $approvalStatus === 'approved' ? $now : null,
 		]
 	);
+	if ($db->has_error) {
+		throw new \RuntimeException('Unable to create customer profile.');
+	}
 
 	return [
 		'id' => $newId,
@@ -693,6 +798,8 @@ function build_customer_match_sql(int $customerId, string $phone, string $idNumb
 
 	$params = [
 		$paramPrefix . '_cid' => $customerId,
+		$paramPrefix . '_transfer_from' => $customerId,
+		$paramPrefix . '_transfer_to' => $customerId,
 	];
 	$parts = [];
 	$fallbackParts = [];
@@ -710,8 +817,19 @@ function build_customer_match_sql(int $customerId, string $phone, string $idNumb
 	}
 
 	$parts[] = "{$alias}.customer_id = :" . $paramPrefix . "_cid";
-	$parts[] = "{$alias}.ledger_transfer_from_customer_id = :" . $paramPrefix . "_cid";
-	$parts[] = "{$alias}.ledger_transfer_to_customer_id = :" . $paramPrefix . "_cid";
+	$parts[] = "(
+		({$alias}.customer_id IS NULL OR {$alias}.customer_id = 0)
+		AND (
+			(
+				LOWER(TRIM(COALESCE({$alias}.transaction_side,''))) = 'pay'
+				AND {$alias}.ledger_transfer_from_customer_id = :" . $paramPrefix . "_transfer_from
+			)
+			OR (
+				LOWER(TRIM(COALESCE({$alias}.transaction_side,''))) = 'receive'
+				AND {$alias}.ledger_transfer_to_customer_id = :" . $paramPrefix . "_transfer_to
+			)
+		)
+	)";
 	if (!empty($fallbackParts)) {
 		$parts[] = "(({$alias}.customer_id IS NULL OR {$alias}.customer_id = 0) AND (" . implode(' OR ', $fallbackParts) . "))";
 	}
@@ -729,7 +847,7 @@ function build_customer_match_sql(int $customerId, string $phone, string $idNumb
  * This is the canonical single-call balance source and also fixes the broken
  * call site in customer-transfer-controller.php.
  */
-function fetch_customer_balance_metrics(Database $db, int $customerId): array
+function fetch_customer_balance_metrics(Database $db, int $customerId, int $excludePayoutId = 0): array
 {
 	$zero = [
 		'total_received' => 0.0,
@@ -760,6 +878,11 @@ function fetch_customer_balance_metrics(Database $db, int $customerId): array
 	$idNumber = trim((string)($customer->id_number ?? ''));
 
 	list($matchSql, $params) = build_customer_match_sql($customerId, $phone, $idNumber, 'm', 'cbm');
+	$excludePayoutSql = '';
+	if ($excludePayoutId > 0) {
+		$excludePayoutSql = 'AND m.id <> :cbm_exclude_payout';
+		$params['cbm_exclude_payout'] = $excludePayoutId;
+	}
 
 	// Money IN: real receives (exclude credit-mode advances).
 	$receivedExpr = statement_received_amount_sql('m');
@@ -804,9 +927,28 @@ function fetch_customer_balance_metrics(Database $db, int $customerId): array
 				COALESCE(SUM({$receivedExpr}),0) AS total_received,
 				COALESCE(SUM({$paidOutExpr}),0) AS total_paid_out,
 				COALESCE(SUM({$withdrawalExpr}),0) AS total_withdrawals
-			 FROM cashpickups m
-			 WHERE (m.deleted IS NULL OR m.deleted = 0)
-			 AND {$matchSql}",
+			 FROM (
+				SELECT DISTINCT
+					m.id,
+					m.customer_id,
+					m.ledger_transfer_from_customer_id,
+					m.ledger_transfer_to_customer_id,
+					m.phone_number,
+					m.customer_id_number,
+					m.transaction_side,
+					m.credit_mode,
+					m.amount_involved,
+					m.transaction_status,
+					m.confirmed_by,
+					m.amount_paid_out,
+					m.approval_status,
+					m.source,
+					m.pickup_charge
+				FROM cashpickups m
+				WHERE (m.deleted IS NULL OR m.deleted = 0)
+				AND {$matchSql}
+				{$excludePayoutSql}
+			 ) AS m",
 			$params
 		) ?: [];
 		$totalReceived = (float)($rows[0]->total_received ?? 0);
@@ -846,7 +988,7 @@ function fetch_customer_balance_metrics(Database $db, int $customerId): array
  * approved (or is empty), and has remaining = amount_involved - active payouts.
  * Allocation consumes the oldest receives first (FIFO by date_created).
  */
-function compute_cumulative_withdrawal_allocation(Database $db, int $customerId, float $amount): array
+function compute_cumulative_withdrawal_allocation(Database $db, int $customerId, float $amount, int $excludePayoutId = 0): array
 {
 	$result = ['slices' => [], 'allocated' => 0.0, 'shortfall' => (float)$amount];
 	if ($customerId <= 0 || $amount <= 0) {
@@ -886,10 +1028,32 @@ function compute_cumulative_withdrawal_allocation(Database $db, int $customerId,
 		THEN (COALESCE(p.amount_paid_out,0) + COALESCE(p.pickup_charge,0))
 		ELSE 0
 	END)";
+	$withdrawalExpr = "(CASE
+		WHEN LOWER(p.transaction_side) = 'pay'
+			AND LOWER(COALESCE(p.source,'')) = 'customer_withdrawal'
+			AND LOWER(COALESCE(p.transaction_status,'')) = 'approved'
+			AND (p.confirmed_by IS NOT NULL AND p.confirmed_by != '')
+			AND COALESCE(p.amount_paid_out,0) > 0
+			AND (
+				p.approval_status IS NULL
+				OR p.approval_status = ''
+				OR LOWER(p.approval_status) IN ('approved','pending')
+			)
+		THEN (COALESCE(p.amount_paid_out,0) + COALESCE(p.pickup_charge,0))
+		ELSE 0
+	END)";
+	$excludeAlreadyPaid = '';
+	$excludeAlreadyWithdrawn = '';
+	if ($excludePayoutId > 0) {
+		$excludeAlreadyPaid = 'AND p.id <> :fifo_exclude_paid';
+		$excludeAlreadyWithdrawn = 'AND p.id <> :fifo_exclude_withdrawal';
+		$params['fifo_exclude_paid'] = $excludePayoutId;
+		$params['fifo_exclude_withdrawal'] = $excludePayoutId;
+	}
 
 	try {
 		$rows = $db->query(
-			"SELECT r.id,
+			"SELECT DISTINCT r.id,
 			        r.tracking_id,
 			        COALESCE(r.amount_involved,0) AS amount_involved,
 			        COALESCE((
@@ -898,14 +1062,16 @@ function compute_cumulative_withdrawal_allocation(Database $db, int $customerId,
 			            WHERE (p.deleted IS NULL OR p.deleted = 0)
 			            AND LOWER(p.transaction_side) = 'pay'
 			            AND p.receive_id = r.id
+			            {$excludeAlreadyPaid}
 			        ),0) AS already_paid,
 			        COALESCE((
-			            SELECT SUM({$payoutExpr})
+			            SELECT SUM({$withdrawalExpr})
 			            FROM cashpickups p
 			            WHERE (p.deleted IS NULL OR p.deleted = 0)
 			            AND LOWER(p.transaction_side) = 'pay'
 			            AND LOWER(COALESCE(p.source,'')) = 'customer_withdrawal'
 			            AND p.receive_id = r.id
+			            {$excludeAlreadyWithdrawn}
 			        ),0) AS already_withdrawn
 			    FROM cashpickups r
 			    WHERE (r.deleted IS NULL OR r.deleted = 0)
@@ -1219,7 +1385,7 @@ function fetch_customer_statement(Database $db, int $customerId): array
 	$currentWhereSql = statement_financial_where_sql('c');
 
 	$rows = $db->query(
-		"SELECT
+		"SELECT DISTINCT
 			c.id,
 			c.date_created,
 			c.tracking_id,
@@ -1409,8 +1575,18 @@ function fetch_customer_workstation_activity(Database $db, int $customerId, arra
 		'workstation'
 	);
 	$transactions = $db->query(
-		"SELECT m.*
+		"SELECT DISTINCT m.*,
+		        CASE WHEN COALESCE(m.ledger_transfer_from_customer_id, 0) > 0
+		             THEN COALESCE(NULLIF(TRIM(transfer_from.full_name), ''), CONCAT('Customer #', m.ledger_transfer_from_customer_id))
+		             ELSE '' END AS transfer_from_customer_name,
+		        CASE WHEN COALESCE(m.ledger_transfer_to_customer_id, 0) > 0
+		             THEN COALESCE(NULLIF(TRIM(transfer_to.full_name), ''), CONCAT('Customer #', m.ledger_transfer_to_customer_id))
+		             ELSE '' END AS transfer_to_customer_name
 		 FROM cashpickups m
+		 LEFT JOIN cashpickup_customers transfer_from
+		 	ON transfer_from.id = m.ledger_transfer_from_customer_id
+		 LEFT JOIN cashpickup_customers transfer_to
+		 	ON transfer_to.id = m.ledger_transfer_to_customer_id
 		 WHERE (m.deleted IS NULL OR m.deleted = 0)
 		 AND {$matchSql}
 		 ORDER BY m.date_created ASC, m.id ASC",
@@ -1455,6 +1631,8 @@ function fetch_customer_workstation_activity(Database $db, int $customerId, arra
 			'source' => (string)($transaction->source ?? ''),
 			'payment_method' => (string)($transaction->payment_method ?? ''),
 			'sender_details' => (string)($transaction->sender_details ?? ''),
+			'transfer_from_customer_name' => (string)($transaction->transfer_from_customer_name ?? ''),
+			'transfer_to_customer_name' => (string)($transaction->transfer_to_customer_name ?? ''),
 			'phone_number' => (string)($transaction->phone_number ?? ''),
 			'tracking_id' => (string)($transaction->tracking_id ?? ''),
 			'approval_status' => (string)($transaction->approval_status ?? ''),

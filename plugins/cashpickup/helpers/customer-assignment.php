@@ -17,6 +17,7 @@ function ensure_schema(Database $db): void
 			customer_id BIGINT unsigned NOT NULL,
 			assigned_user_id INT unsigned NOT NULL,
 			amount DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+			pickup_charge DECIMAL(14,2) NOT NULL DEFAULT 0.00,
 			status VARCHAR(20) NOT NULL DEFAULT 'active',
 			assigned_by INT unsigned NULL,
 			date_created DATETIME NULL,
@@ -30,7 +31,20 @@ function ensure_schema(Database $db): void
 	if ($db->has_error) {
 		throw new \RuntimeException('Unable to prepare customer payout assignments.');
 	}
+	$db->query(
+		"CREATE TABLE IF NOT EXISTS cashpickup_customer_assignment_payouts (
+			payout_id BIGINT unsigned NOT NULL,
+			assignment_id BIGINT unsigned NOT NULL,
+			amount DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+			PRIMARY KEY (payout_id, assignment_id),
+			KEY assignment_id (assignment_id)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+	);
+	if ($db->has_error) {
+		throw new \RuntimeException('Unable to prepare customer payout assignment tracking.');
+	}
 	foreach ([
+		'pickup_charge' => 'DECIMAL(14,2) NOT NULL DEFAULT 0.00',
 		'cancelled_by' => 'INT unsigned NULL',
 		'date_cancelled' => 'DATETIME NULL',
 	] as $columnName => $columnDefinition) {
@@ -82,6 +96,51 @@ function ensure_schema(Database $db): void
 			throw new \RuntimeException('Unable to index customer payout tracking.');
 		}
 	}
+}
+
+function payout_usage_summary_sql(): string
+{
+	return "SELECT usage_rows.assignment_id,
+		       COALESCE(SUM(usage_rows.used_amount),0) AS used_amount
+		FROM (
+			SELECT capu.assignment_id, capu.amount AS used_amount
+			FROM cashpickup_customer_assignment_payouts capu
+			JOIN cashpickups payout ON payout.id = capu.payout_id
+			WHERE (payout.deleted IS NULL OR payout.deleted = 0)
+			AND LOWER(payout.transaction_side) = 'pay'
+			AND LOWER(COALESCE(payout.source,'')) = 'customer_withdrawal'
+			AND payout.transaction_status = 'Approved'
+			AND payout.confirmed_by IS NOT NULL AND payout.confirmed_by != ''
+			AND COALESCE(payout.amount_paid_out,0) > 0
+			AND (
+				payout.approval_status IS NULL
+				OR payout.approval_status = ''
+				OR LOWER(payout.approval_status) IN ('approved','pending')
+			)
+			UNION ALL
+			SELECT payout.customer_assignment_id AS assignment_id,
+			       SUM(COALESCE(payout.amount_paid_out,0) + COALESCE(payout.pickup_charge,0)) AS used_amount
+			FROM cashpickups payout
+			WHERE (payout.deleted IS NULL OR payout.deleted = 0)
+			AND LOWER(payout.transaction_side) = 'pay'
+			AND LOWER(COALESCE(payout.source,'')) = 'customer_withdrawal'
+			AND payout.transaction_status = 'Approved'
+			AND payout.confirmed_by IS NOT NULL AND payout.confirmed_by != ''
+			AND COALESCE(payout.amount_paid_out,0) > 0
+			AND (
+				payout.approval_status IS NULL
+				OR payout.approval_status = ''
+				OR LOWER(payout.approval_status) IN ('approved','pending')
+			)
+			AND payout.customer_assignment_id IS NOT NULL
+			AND NOT EXISTS (
+				SELECT 1
+				FROM cashpickup_customer_assignment_payouts capu
+				WHERE capu.payout_id = payout.id
+			)
+			GROUP BY payout.customer_assignment_id
+		) AS usage_rows
+		GROUP BY usage_rows.assignment_id";
 }
 
 function migrate_legacy_customer_assignments(Database $db, int $customerId, int $actorId = 0): void
@@ -194,7 +253,7 @@ function get_customer_assignments(Database $db, int $customerId): array
 
 	ensure_schema($db);
 	return $db->query(
-		"SELECT a.id, a.customer_id, a.assigned_user_id, a.amount, a.status,
+		"SELECT a.id, a.customer_id, a.assigned_user_id, a.amount, a.pickup_charge, a.status,
 		        a.assigned_by, a.date_created, a.cancelled_by, a.date_cancelled,
 		        u.first_name AS assigned_first_name, u.last_name AS assigned_last_name,
 		        cancelled_user.first_name AS cancelled_first_name,
@@ -207,24 +266,7 @@ function get_customer_assignments(Database $db, int $customerId): array
 		 LEFT JOIN users u ON u.id = a.assigned_user_id
 		 LEFT JOIN users cancelled_user ON cancelled_user.id = a.cancelled_by
 		 LEFT JOIN users assigner ON assigner.id = a.assigned_by
-		 LEFT JOIN (
-			SELECT customer_assignment_id,
-			       COALESCE(SUM(COALESCE(amount_paid_out,0) + COALESCE(pickup_charge,0)),0) AS used_amount
-			FROM cashpickups
-			WHERE (deleted IS NULL OR deleted = 0)
-			AND LOWER(transaction_side) = 'pay'
-			AND LOWER(COALESCE(source,'')) = 'customer_withdrawal'
-			AND transaction_status = 'Approved'
-			AND confirmed_by IS NOT NULL AND confirmed_by != ''
-			AND COALESCE(amount_paid_out,0) > 0
-			AND (
-				approval_status IS NULL
-				OR approval_status = ''
-				OR LOWER(approval_status) IN ('approved','pending')
-			)
-			AND customer_assignment_id IS NOT NULL
-			GROUP BY customer_assignment_id
-		 ) AS used ON used.customer_assignment_id = a.id
+		 LEFT JOIN (" . payout_usage_summary_sql() . ") AS used ON used.assignment_id = a.id
 		 WHERE a.customer_id = :customer_id
 		 ORDER BY a.id DESC",
 		['customer_id' => $customerId]
@@ -267,6 +309,13 @@ function plan_allocation(Database $db, int $customerId, int $assignedUserId, flo
 		$result['slices'][] = [
 			'assignment_id' => (int)($assignment->id ?? 0),
 			'amount' => round($take, 2),
+			'assignment_amount' => (float)($assignment->amount ?? 0),
+			'assignment_charge' => (float)($assignment->pickup_charge ?? 0),
+			'pickup_charge' => calculate_prorated_charge(
+				(float)($assignment->pickup_charge ?? 0),
+				(float)($assignment->amount ?? 0),
+				$take
+			),
 		];
 		$result['allocated'] += $take;
 		$remaining = round(max(0.0, $remaining - $take), 2);
@@ -278,6 +327,16 @@ function plan_allocation(Database $db, int $customerId, int $assignedUserId, flo
 	$result['allocated'] = round($result['allocated'], 2);
 	$result['shortfall'] = round($remaining, 2);
 	return $result;
+}
+
+function calculate_prorated_charge(float $totalCharge, float $assignedAmount, float $payoutAmount): float
+{
+	if ($totalCharge <= 0 || $assignedAmount <= 0 || $payoutAmount <= 0) {
+		return 0.0;
+	}
+
+	$charge = $totalCharge * min($payoutAmount, $assignedAmount) / $assignedAmount;
+	return round(floor(($charge + 0.000000001) * 10) / 10, 1);
 }
 
 function get_legacy_remaining_amount(Database $db, int $customerId, int $assignedUserId = 0): float

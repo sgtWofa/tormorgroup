@@ -1081,7 +1081,7 @@ try {
 				actions.push(`<button type="button" class="agency-row-action agency-row-action--approve" data-agency-approve="${agencyEscapeHtml(row.id)}" aria-label="Approve account opening"><i class="fa fa-check" aria-hidden="true"></i><span>Approve</span></button>`);
 			}
 			if(!isClosedStatus){
-				actions.push(`<button type="button" class="agency-row-action agency-row-action--cancel js-direct-cancel" data-id="${row.id}" data-cancel-date="${String(row.date_created || '').slice(0, 10)}" data-cancel-endpoint="${VIEW_BASE}/cancel" data-cancel-label="Transaction #${row.id}" aria-label="Cancel transaction #${row.id}" title="Cancel transaction"><i class="fa-solid fa-arrow-rotate-left" aria-hidden="true"></i></button>`);
+				actions.push(`<button type="button" class="agency-row-action agency-row-action--cancel js-direct-cancel" data-id="${row.id}" data-cancel-endpoint="${VIEW_BASE}/cancel" data-cancel-label="Transaction #${row.id}" aria-label="Cancel transaction #${row.id}" title="Cancel transaction"><i class="fa-solid fa-arrow-rotate-left" aria-hidden="true"></i></button>`);
 			}
 			const actionHtml = actions.length
 				? `<div class="agency-row-actions">${actions.join('')}</div>`
@@ -1404,7 +1404,7 @@ try {
 })();
 </script>
 <div class="d-none" data-direct-cancel-csrf><?=csrf()?></div>
-<script src="<?=ROOT?>/plugins/reversals/assets/direct-cancel.js?v=20261116-1"></script>
+<script src="<?=ROOT?>/plugins/reversals/assets/direct-cancel.js"></script>
 
 <?php else: ?>
 	<div class="alert alert-danger text-center">

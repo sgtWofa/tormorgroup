@@ -257,24 +257,17 @@ function initOperationsAccountPlugin() {
     if (simsRegion) {
         const ajaxUrl = simsRegion.getAttribute('data-ajax-url');
         if (ajaxUrl) {
-            let simsSearchTimer = null;
-            let simsLoadSequence = 0;
 
             async function loadSims(page) {
-                const loadSequence = ++simsLoadSequence;
                 try {
                     // Read current controls from the live DOM
                     const pageSizeEl   = simsRegion.querySelector('[data-role="ops-page-size"]');
                     const searchEl     = simsRegion.querySelector('[data-role="ops-sim-search"]');
                     const currentLimit = pageSizeEl && pageSizeEl.value ? pageSizeEl.value : '';
-                    const searchValue  = searchEl ? searchEl.value : '';
-                    const currentQ     = searchValue.trim();
-                    const searchHadFocus = searchEl === document.activeElement;
-                    const selectionStart = searchHadFocus ? searchEl.selectionStart : null;
-                    const selectionEnd = searchHadFocus ? searchEl.selectionEnd : null;
+                    const currentQ     = searchEl && searchEl.value ? searchEl.value.trim() : '';
                     // Bulk network filter lives outside the ajax region
                     const networkFilterEl = document.getElementById('bulkNetworkFilter');
-                    const currentNetwork = networkFilterEl && networkFilterEl.value ? networkFilterEl.value : '';
+                    const currentNetwork  = networkFilterEl && networkFilterEl.value ? networkFilterEl.value : '';
 
                     const url = new URL(ajaxUrl, window.location.origin);
                     if (currentLimit)   url.searchParams.set('limit', currentLimit);
@@ -285,20 +278,7 @@ function initOperationsAccountPlugin() {
                     const resp = await fetch(url.toString(), {
                         headers: { 'X-Requested-With': 'XMLHttpRequest' }
                     });
-                    if (!resp.ok) {
-                        throw new Error('SIM request failed with status ' + resp.status);
-                    }
                     const html = await resp.text();
-                    if (/<\s*(?:!doctype|html)\b/i.test(html)) {
-                        throw new Error('SIM pagination returned a full page instead of a list fragment');
-                    }
-                    const liveSearchEl = simsRegion.querySelector('[data-role="ops-sim-search"]');
-                    if (
-                        loadSequence !== simsLoadSequence ||
-                        (liveSearchEl && liveSearchEl.value !== searchValue)
-                    ) {
-                        return;
-                    }
                     simsRegion.innerHTML = html;
 
                     try {
@@ -311,14 +291,14 @@ function initOperationsAccountPlugin() {
                         const newPageSizeEl = simsRegion.querySelector('[data-role="ops-page-size"]');
                         if (newPageSizeEl) newPageSizeEl.value = currentLimit;
                     }
-                    const newSearchEl = simsRegion.querySelector('[data-role="ops-sim-search"]');
-                    if (newSearchEl) {
-                        newSearchEl.value = searchValue;
-                        if (searchHadFocus) {
+                    if (currentQ) {
+                        const newSearchEl = simsRegion.querySelector('[data-role="ops-sim-search"]');
+                        if (newSearchEl) {
+                            newSearchEl.value = currentQ;
+                            // Keep search bar active so user can continue typing after page updates
                             newSearchEl.focus();
-                            if (selectionStart !== null && selectionEnd !== null) {
-                                newSearchEl.setSelectionRange(selectionStart, selectionEnd);
-                            }
+                            const len = newSearchEl.value.length;
+                            newSearchEl.setSelectionRange(len, len);
                         }
                     }
 
@@ -352,48 +332,32 @@ function initOperationsAccountPlugin() {
                         }
                     }
 
+                    bindSimsPager();
                 } catch (err) {
                     console.error('Failed to load sims via AJAX', err);
                 }
             }
 
+            function bindSimsPager() {
+                const links = simsRegion.querySelectorAll('.pagination a');
+                links.forEach(link => {
+                    link.addEventListener('click', function(e) {
+                        const href = this.getAttribute('href');
+                        if (!href || href === '#') return;
+                        e.preventDefault();
+                        try {
+                            const u = new URL(href, window.location.origin);
+                            const page = u.searchParams.get('page') || '1';
+                            loadSims(page);
+                        } catch (err) {
+                            console.error(err);
+                        }
+                    });
+                });
+            }
+
             // Delegated handlers for Sims filters/search within the region
             if (!simsRegion.__opsSimsFiltersBound) {
-                simsRegion.addEventListener('click', function(e) {
-                    if (!(e.target instanceof Element)) return;
-                    const link = e.target.closest('.pagination a');
-                    if (!link || !simsRegion.contains(link)) return;
-
-                    const href = link.getAttribute('href');
-                    if (!href || href === '#') return;
-                    e.preventDefault();
-                    if (simsSearchTimer) {
-                        clearTimeout(simsSearchTimer);
-                        simsSearchTimer = null;
-                    }
-                    try {
-                        const url = new URL(href, window.location.href);
-                        const pageUrl = new URL(window.location.href);
-                        pageUrl.searchParams.set('page', url.searchParams.get('page') || '1');
-
-                        const pageSizeEl = simsRegion.querySelector('[data-role="ops-page-size"]');
-                        const searchEl = simsRegion.querySelector('[data-role="ops-sim-search"]');
-                        const networkFilterEl = document.getElementById('bulkNetworkFilter');
-                        const limit = pageSizeEl ? pageSizeEl.value : '';
-                        const query = searchEl ? searchEl.value.trim() : '';
-                        const network = networkFilterEl ? networkFilterEl.value : '';
-                        if (limit) pageUrl.searchParams.set('limit', limit);
-                        if (query) pageUrl.searchParams.set('q', query);
-                        else pageUrl.searchParams.delete('q');
-                        if (network) pageUrl.searchParams.set('network', network);
-                        else pageUrl.searchParams.delete('network');
-                        pageUrl.hash = 'sims';
-                        window.location.assign(pageUrl.toString());
-                    } catch (err) {
-                        console.error('Failed to navigate SIM pagination', err);
-                    }
-                });
-
                 // Page-size reacts on change
                 simsRegion.addEventListener('change', function(e) {
                     const target = e.target;
@@ -404,6 +368,7 @@ function initOperationsAccountPlugin() {
                 });
 
                 // Search reacts on input (debounced)
+                let simsSearchTimer = null;
                 simsRegion.addEventListener('input', function(e) {
                     const target = e.target;
                     if (!target) return;
@@ -429,24 +394,10 @@ function initOperationsAccountPlugin() {
                 simsRegion.__opsSimsFiltersBound = true;
             }
 
-            const pageState = new URL(window.location.href).searchParams;
-            const initialPage = pageState.get('page') || '1';
-            const initialSearch = pageState.get('q') || '';
-            const initialLimit = pageState.get('limit') || '';
-            const initialNetwork = pageState.get('network') || '';
-            const initialSearchEl = simsRegion.querySelector('[data-role="ops-sim-search"]');
-            const initialPageSizeEl = simsRegion.querySelector('[data-role="ops-page-size"]');
-            const networkFilterEl = document.getElementById('bulkNetworkFilter');
-            if (initialSearchEl) initialSearchEl.value = initialSearch;
-            if (initialPageSizeEl && initialLimit) initialPageSizeEl.value = initialLimit;
-            if (networkFilterEl && initialNetwork) networkFilterEl.value = initialNetwork;
-            if (window.location.hash === '#sims') {
-                const simsTab = document.getElementById('sims-tab');
-                if (simsTab && window.bootstrap && window.bootstrap.Tab) {
-                    window.bootstrap.Tab.getOrCreateInstance(simsTab).show();
-                }
-            }
-            loadSims(initialPage);
+            // Initial wire for the existing pager
+            bindSimsPager();
+
+            loadSims(1);
         }
     }
 }

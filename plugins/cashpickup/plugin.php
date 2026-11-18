@@ -123,14 +123,6 @@ add_filter('basic-admin_before_admin_links',function($links){
 	$isManagerOrAdmin = (user_can('is_manager') || user_can('is_admin'));
 
 	try{
-		$badgeCacheKey = 'cashpickup_nav_badge_v3_' . (int)$user_id . '_' . ($isManagerOrAdmin ? 'mgr' : 'usr');
-		$badgeSession = new \Core\Session;
-		$badgeCached = $badgeSession->get($badgeCacheKey);
-		if (is_array($badgeCached) && (int)($badgeCached['expires'] ?? 0) >= time()) {
-			$total_pending = (int)($badgeCached['count'] ?? 0);
-			goto cashpickup_badge_done;
-		}
-
 		$params = [];
 		$scopeWhere = '';
 		if(!$isManagerOrAdmin && $user_id > 0){
@@ -159,7 +151,7 @@ add_filter('basic-admin_before_admin_links',function($links){
 		}
 
 		$pendingRows = $db->query(
-			"SELECT COUNT(id) AS c
+			"SELECT COUNT(DISTINCT id) AS c
 			 FROM cashpickups
 			 WHERE (deleted IS NULL OR deleted = 0)
 			 AND (
@@ -171,7 +163,10 @@ add_filter('basic-admin_before_admin_links',function($links){
 					LOWER(transaction_side) = 'pay'
 					AND LOWER(COALESCE(approval_status,'approved')) IN ('pending','draft')
 				)
-			 ){$scopeWhere}",
+			 )
+			 AND LOWER(COALESCE(transaction_status,'')) NOT LIKE 'cancel%'
+			 AND LOWER(COALESCE(approval_status,'')) NOT LIKE 'cancel%'
+			 {$scopeWhere}",
 			$params
 		);
 		$total_pending = (int)($pendingRows[0]->c ?? 0);
@@ -261,10 +256,52 @@ add_filter('basic-admin_before_admin_links',function($links){
 					}
 				}
 
+				$cancelledAssignedPays = $db->query(
+					"SELECT DISTINCT cancelled.receive_id
+					 FROM cashpickups cancelled
+					 WHERE (cancelled.deleted IS NULL OR cancelled.deleted = 0)
+					 AND cancelled.receive_id IS NOT NULL
+					 AND LOWER(cancelled.transaction_side) = 'pay'
+					 AND (
+						LOWER(COALESCE(cancelled.approval_status,'')) IN ('cancelled','canceled')
+						OR LOWER(COALESCE(cancelled.transaction_status,'')) LIKE 'cancel%'
+					 )
+					 AND (cancelled.created_by = :cancelled_created_uid OR cancelled.assigned_user_id = :cancelled_assigned_uid)
+					 AND NOT EXISTS (
+						SELECT 1
+						FROM cashpickups newer
+						WHERE (newer.deleted IS NULL OR newer.deleted = 0)
+						AND newer.receive_id = cancelled.receive_id
+						AND LOWER(newer.transaction_side) = 'pay'
+						AND (newer.created_by = :newer_created_uid OR newer.assigned_user_id = :newer_assigned_uid)
+						AND LOWER(COALESCE(newer.approval_status,'')) NOT IN ('cancelled','canceled')
+						AND LOWER(COALESCE(newer.transaction_status,'')) NOT LIKE 'cancel%'
+						AND (
+							newer.date_created > cancelled.date_created
+							OR (newer.date_created = cancelled.date_created AND newer.id > cancelled.id)
+						)
+					 )",
+					[
+						'cancelled_created_uid' => $user_id,
+						'cancelled_assigned_uid' => $user_id,
+						'newer_created_uid' => $user_id,
+						'newer_assigned_uid' => $user_id,
+					]
+				) ?: [];
+				$cancelledAssignedPayMap = [];
+				foreach ($cancelledAssignedPays as $cancelledAssignedPay) {
+					$cancelledReceiveId = (int)($cancelledAssignedPay->receive_id ?? 0);
+					if ($cancelledReceiveId > 0) {
+						$cancelledAssignedPayMap[$cancelledReceiveId] = true;
+					}
+				}
+
 				$assignedReadyCount = 0;
 				foreach ($assignedReadyRows as $assignedReadyRow) {
 					$receiveId = (int)($assignedReadyRow->receive_id ?? 0);
-					if ($receiveId <= 0 || isset($pendingAssignedPayMap[$receiveId])) {
+					if ($receiveId <= 0
+						|| isset($pendingAssignedPayMap[$receiveId])
+						|| isset($cancelledAssignedPayMap[$receiveId])) {
 						continue;
 					}
 					$assignedGross = (float)($assignedReadyRow->assigned_gross ?? 0);
@@ -281,8 +318,63 @@ add_filter('basic-admin_before_admin_links',function($links){
 				// ignore assignment badge failures
 			}
 		}
-		$badgeSession->set($badgeCacheKey, ['count' => $total_pending, 'expires' => time() + 10]);
-		cashpickup_badge_done:
+		if (!$isManagerOrAdmin && $user_id > 0) {
+			try {
+				require_once plugin_path('helpers/customer-assignment.php');
+				\CashpickupCustomerAssignment\ensure_schema($db);
+				$assignmentUsageSql = \CashpickupCustomerAssignment\payout_usage_summary_sql();
+				$customerAssignmentRows = $db->query(
+					"SELECT a.customer_id,
+					        SUM(GREATEST(0, a.amount - COALESCE(used.used_amount,0))) AS remaining_amount
+					 FROM cashpickup_customer_assignments a
+					 JOIN cashpickup_customers c ON c.id = a.customer_id
+					 LEFT JOIN ({$assignmentUsageSql}) AS used ON used.assignment_id = a.id
+					 WHERE a.assigned_user_id = :assigned_user_id
+					 AND LOWER(TRIM(COALESCE(a.status,''))) = 'active'
+					 AND c.deleted = 0
+					 AND (
+						c.approval_status IS NULL
+						OR c.approval_status = ''
+						OR LOWER(TRIM(c.approval_status)) = 'approved'
+					 )
+					 AND NOT EXISTS (
+						SELECT 1
+						FROM cashpickups pending_payout
+						WHERE (pending_payout.deleted IS NULL OR pending_payout.deleted = 0)
+						AND pending_payout.customer_id = a.customer_id
+						AND LOWER(TRIM(COALESCE(pending_payout.transaction_side,''))) = 'pay'
+						AND LOWER(TRIM(COALESCE(pending_payout.approval_status,'pending'))) IN ('pending','draft')
+						AND LOWER(TRIM(COALESCE(pending_payout.transaction_status,''))) NOT LIKE 'cancel%'
+						AND pending_payout.assigned_user_id = :pending_assigned_user_id
+					 )
+					 GROUP BY a.customer_id
+					 HAVING remaining_amount > 0.00001",
+					[
+						'assigned_user_id' => $user_id,
+						'pending_assigned_user_id' => $user_id,
+					]
+				) ?: [];
+				if ($db->has_error) {
+					throw new \RuntimeException('Unable to count customer payout assignments.');
+				}
+
+				$customerAssignmentReadyCount = 0;
+				foreach ($customerAssignmentRows as $assignmentRow) {
+					$customerId = (int)($assignmentRow->customer_id ?? 0);
+					if ($customerId <= 0 || (float)($assignmentRow->remaining_amount ?? 0) <= 0.00001) {
+						continue;
+					}
+					$balanceMetrics = \CashpickupLedger\fetch_customer_balance_metrics($db, $customerId);
+					if ((float)($balanceMetrics['balance'] ?? 0) > 0.00001) {
+						$customerAssignmentReadyCount++;
+					}
+				}
+
+				$total_pending += $customerAssignmentReadyCount;
+			} catch (\Throwable $e) {
+				error_log('[cashpickup] Customer assignment badge count failed: ' . $e->getMessage());
+			}
+		}
 	}catch(\Throwable $e){
 		$total_pending = 0;
 	}
@@ -446,6 +538,8 @@ add_action('controller',function(){
 		if(!user_can('view_cashpickup')){
 			cashpickup_json_response(['success' => false, 'message' => 'Access denied'], 403);
 		}
+		header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+		header('Pragma: no-cache');
 		try{
 			require_once plugin_path('helpers/customer-ledger.php');
 			$db = new \Core\Database;

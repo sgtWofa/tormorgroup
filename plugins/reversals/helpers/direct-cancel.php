@@ -329,9 +329,6 @@ if (!function_exists('direct_cancel_handle')) {
             if ((int)($row->deleted ?? 0) !== 0) {
                 throw new \DomainException('Deleted transactions cannot be cancelled.', 422);
             }
-            if (substr(trim((string)($row->date_created ?? '')), 0, 10) !== substr($now, 0, 10)) {
-                throw new \DomainException('Only transactions created today can be cancelled.', 422);
-            }
             if (empty($config['can_cancel']($row, $actorId, $session))) {
                 throw new \DomainException('You can only cancel transactions visible to your account.', 403);
             }

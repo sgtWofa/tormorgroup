@@ -1,27 +1,21 @@
 <?php
 
 $cashpickup = new \Cashpickups\Cashpickup;
+require_once plugin_path('helpers/permissions.php');
+require_once plugin_path('helpers/customer-ledger.php');
 
 $session = get_session();
 $actorId = (int)($session->id ?? 0);
 
-// Admin or General Manager can approve
+// Admin, General Manager, or Operations Manager can approve.
 $canApprove = user_can('is_admin');
 if (!$canApprove) {
 	try {
 		$dbRole = new \Core\Database;
-		$gm = $dbRole->query(
-			"SELECT 1
-			 FROM user_roles_map urm
-			 JOIN user_roles ur ON ur.id = urm.role_id
-			 WHERE urm.disabled = 0
-			 AND urm.user_id = :uid
-			 AND LOWER(ur.role) IN ('general manager','general_manager','generalmanager','gm','is_general_manager','operations manager','operations_manager')
-			 LIMIT 1",
-			['uid' => $actorId]
-		);
-		$canApprove = !empty($gm);
+		$canApprove = \CashpickupPermissions\is_general_manager($dbRole, $actorId)
+			|| \CashpickupPermissions\is_operations_manager($dbRole, $actorId);
 	} catch (\Throwable $e) {
+		error_log('[cashpickup] Approval access check failed: ' . $e->getMessage());
 		$canApprove = false;
 	}
 }
@@ -32,6 +26,8 @@ if (!$canApprove) {
 }
 
 $postdata = $req->post();
+$returnCustomerId = (int)($postdata['customer_id'] ?? 0);
+$returnToView = (string)($postdata['return_to_view'] ?? '') === '1';
 $csrf = csrf_verify($postdata);
 if (!$csrf) {
 	message_fail('Form expired');
@@ -53,6 +49,18 @@ if (empty($row)) {
 $side = strtolower(trim((string)($row->transaction_side ?? '')));
 $prevApproval = strtolower(trim((string)($row->approval_status ?? 'pending')));
 if ($prevApproval === '') $prevApproval = 'pending';
+$source = strtolower(trim((string)($row->source ?? '')));
+if ($source === 'customer_withdrawal') {
+	$rowCustomerId = (int)($row->customer_id ?? 0);
+	if ($rowCustomerId > 0) {
+		$returnCustomerId = $rowCustomerId;
+	}
+}
+$approvalReturnPath = $returnToView
+	? $admin_route.'/'.$plugin_route.'/view/'.$id
+	: ($source === 'customer_withdrawal' && $returnCustomerId > 0
+		? $admin_route.'/'.$plugin_route.'/customer/'.$returnCustomerId
+		: $admin_route.'/'.$plugin_route.'/view/'.(int)($row->receive_id ?? 0));
 $isCreditReceive = $side === 'receive' && strtolower(trim((string)($row->credit_mode ?? ''))) === 'credit';
 
 if ($isCreditReceive) {
@@ -98,40 +106,94 @@ if ($isCreditReceive) {
 }
 
 if ($side === 'pay' && $prevApproval !== 'approved') {
-	try {
-		$dbCheck = new \Core\Database;
-		$receiveId = (int)($row->receive_id ?? 0);
-		if ($receiveId > 0) {
+	$receiveId = (int)($row->receive_id ?? 0);
+	$thisAmt = (float)($row->amount_paid_out ?? 0) + (float)($row->pickup_charge ?? 0);
+	if ($source === 'customer_withdrawal') {
+		$systemDenialReason = (string)($row->denial_reason ?? '');
+		$isRetryableSystemDenial = strpos($systemDenialReason, 'System denied: customer account balance is insufficient.') === 0
+			|| strpos($systemDenialReason, 'System denied: approving this payout would cause overage.') === 0;
+		if ($prevApproval === 'denied' && !$isRetryableSystemDenial) {
+			message_fail('This rejected payout cannot be approved. Submit a new payout if needed.');
+			redirect($approvalReturnPath);
+		}
+		try {
+			$dbCheck = new \Core\Database;
+			$customerId = (int)($row->customer_id ?? 0);
+			if ($customerId <= 0 || $thisAmt <= 0) {
+				throw new \RuntimeException('Customer payout is missing a valid customer or amount.');
+			}
+			$balance = \CashpickupLedger\fetch_customer_balance_metrics($dbCheck, $customerId, $id);
+			if ($dbCheck->has_error) {
+				throw new \RuntimeException('Unable to check the customer account balance.');
+			}
+			$availableBalance = (float)($balance['balance'] ?? 0);
+			if ($availableBalance + 0.00001 < $thisAmt) {
+				$denialReason = 'System denied: customer account balance is insufficient. Available: '
+					. number_format(max(0.0, $availableBalance), 2)
+					. ', this payout: ' . number_format($thisAmt, 2) . '.';
+				$cashpickup->update($id, [
+					'approval_status' => 'denied',
+					'denial_reason' => $denialReason,
+					'updated_by' => $actorId,
+					'date_updated' => date('Y-m-d H:i:s'),
+				]);
+				if ($cashpickup->has_error) {
+					throw new \RuntimeException('Unable to record the insufficient-balance denial.');
+				}
+				message_fail('Payout denied automatically: insufficient customer account balance');
+				redirect($approvalReturnPath);
+			}
+		} catch (\Throwable $e) {
+			error_log('[cashpickup] Customer payout balance validation failed for row ' . $id . ': ' . $e->getMessage());
+			message_fail('Unable to validate the payout against the customer account balance. The payout was not approved.');
+			redirect($approvalReturnPath);
+			return;
+		}
+	} elseif ($receiveId > 0) {
+		try {
+			$dbCheck = new \Core\Database;
 			$recv = $dbCheck->query(
-				"SELECT id, amount_involved
-				 FROM cashpickups
-				 WHERE (deleted IS NULL OR deleted = 0)
-				 AND LOWER(transaction_side) = 'receive'
-				 AND id = :id
-				 LIMIT 1",
-				['id' => $receiveId]
+			 "SELECT id, amount_involved
+			  FROM cashpickups
+			  WHERE (deleted IS NULL OR deleted = 0)
+			  AND LOWER(transaction_side) = 'receive'
+			  AND id = :id
+			  LIMIT 1",
+			 ['id' => $receiveId]
 			);
+			if ($dbCheck->has_error) {
+				throw new \RuntimeException('Unable to load receive total.');
+			}
 			$receiveTotal = !empty($recv) ? (float)($recv[0]->amount_involved ?? 0) : 0.0;
-			$approvedSumRow = $dbCheck->query(
-				"SELECT COALESCE(SUM(COALESCE(amount_paid_out,0) + COALESCE(pickup_charge,0)),0) AS paid
-				 FROM cashpickups
-				 WHERE (deleted IS NULL OR deleted = 0)
-				 AND LOWER(transaction_side) = 'pay'
-				 AND receive_id = :rid
-				 AND id != :this_id
-				 AND (
-					approval_status IS NULL
-					OR approval_status = ''
-					OR LOWER(approval_status) = 'approved'
-				 )
-				 AND transaction_status = 'Approved'
-				 AND (confirmed_by IS NOT NULL AND confirmed_by != '')
-				 AND COALESCE(amount_paid_out,0) > 0",
-				['rid' => $receiveId, 'this_id' => $id]
-			);
-			$alreadyApproved = (float)($approvedSumRow[0]->paid ?? 0);
-			$thisAmt = (float)($row->amount_paid_out ?? 0) + (float)($row->pickup_charge ?? 0);
-			if (($alreadyApproved + $thisAmt) - $receiveTotal > 0.00001) {
+			$getApprovedTotal = static function (int $targetReceiveId) use ($dbCheck, $id): float {
+				if ($targetReceiveId <= 0) {
+					return 0.0;
+				}
+				$approvedSumRow = $dbCheck->query(
+				 "SELECT COALESCE(SUM(COALESCE(amount_paid_out,0) + COALESCE(pickup_charge,0)),0) AS paid
+				  FROM cashpickups
+				  WHERE (deleted IS NULL OR deleted = 0)
+				  AND LOWER(transaction_side) = 'pay'
+				  AND receive_id = :rid
+				  AND id != :this_id
+				  AND (
+				 	approval_status IS NULL
+				 	OR approval_status = ''
+				 	OR LOWER(approval_status) = 'approved'
+				  )
+				  AND transaction_status = 'Approved'
+				  AND (confirmed_by IS NOT NULL AND confirmed_by != '')
+				  AND COALESCE(amount_paid_out,0) > 0",
+				 ['rid' => $targetReceiveId, 'this_id' => $id]
+				);
+				if ($dbCheck->has_error) {
+				 throw new \RuntimeException('Unable to check previously approved payouts.');
+				}
+				return (float)($approvedSumRow[0]->paid ?? 0);
+			};
+			$alreadyApproved = $getApprovedTotal($receiveId);
+			$wouldOverdrawReceive = ($alreadyApproved + $thisAmt) - $receiveTotal > 0.00001;
+			if ($wouldOverdrawReceive) {
 				$sysReason = 'System denied: approving this payout would cause overage. Receive total: '.number_format((float)$receiveTotal,2).', already approved: '.number_format((float)$alreadyApproved,2).', this payout: '.number_format((float)$thisAmt,2).'.';
 				$cashpickup->update($id, [
 					'approval_status' => 'denied',
@@ -140,11 +202,14 @@ if ($side === 'pay' && $prevApproval !== 'approved') {
 					'date_updated' => date('Y-m-d H:i:s'),
 				]);
 				message_fail('Payout denied automatically: would exceed receive total');
-				redirect($admin_route.'/'.$plugin_route.'/view/'.$receiveId);
+				redirect($approvalReturnPath);
 			}
+		} catch (\Throwable $e) {
+			error_log('[cashpickup] Payout receive validation failed for row ' . $id . ': ' . $e->getMessage());
+			message_fail('Unable to validate the payout against its receive balance. The payout was not approved.');
+			redirect($approvalReturnPath);
+			return;
 		}
-	} catch (\Throwable $e) {
-		// ignore check failures and proceed
 	}
 }
 
@@ -170,7 +235,7 @@ if ($side === 'pay' && $prevApproval !== 'approved') {
 					'date_updated' => date('Y-m-d H:i:s'),
 				]);
 				message_fail('Payout denied automatically: invalid cash payout configuration');
-				redirect($admin_route.'/'.$plugin_route.'/view/'.$receiveId);
+				redirect($approvalReturnPath);
 			}
 
 			$bridgePath = realpath(__DIR__ . '/../../backoffice/helpers/cashdrawer-bridge.php');
@@ -182,7 +247,7 @@ if ($side === 'pay' && $prevApproval !== 'approved') {
 					'date_updated' => date('Y-m-d H:i:s'),
 				]);
 				message_fail('Payout denied automatically: unable to validate cashdrawer balance');
-				redirect($admin_route.'/'.$plugin_route.'/view/'.$receiveId);
+				redirect($approvalReturnPath);
 			}
 
 			require_once $bridgePath;
@@ -195,7 +260,7 @@ if ($side === 'pay' && $prevApproval !== 'approved') {
 					'date_updated' => date('Y-m-d H:i:s'),
 				]);
 				message_fail('Payout denied automatically: unable to validate cashdrawer balance');
-				redirect($admin_route.'/'.$plugin_route.'/view/'.$receiveId);
+				redirect($approvalReturnPath);
 			}
 
 			$denos = \BackOfficeCashdrawer\normalizeDenominations($row->denos_json ?? '[]', $amt, 'GHS');
@@ -219,7 +284,7 @@ if ($side === 'pay' && $prevApproval !== 'approved') {
 						'date_updated' => date('Y-m-d H:i:s'),
 					]);
 					message_fail('Payout denied automatically: insufficient cashdrawer notes for cash payout. Shortages: '.$shortageText);
-					redirect($admin_route.'/'.$plugin_route.'/view/'.$receiveId);
+					redirect($approvalReturnPath);
 				}
 			}
 			$check = \BackOfficeCashdrawer\checkCashDenominationSufficiencyCurrency($drawerUserId, $denos, $amt, 'GHS');
@@ -339,7 +404,7 @@ if ($side === 'pay' && $prevApproval !== 'approved') {
 					'date_updated' => date('Y-m-d H:i:s'),
 				]);
 				message_fail('Payout denied automatically: insufficient cashdrawer balance for transfer payout. Shortfall: GH₵ '.number_format($shortfall, 2));
-				redirect($admin_route.'/'.$plugin_route.'/view/'.(int)($row->receive_id ?? 0));
+				redirect($approvalReturnPath);
 			}
 		} catch (\Throwable $e) {
 			// If we cannot validate, fail closed to avoid negative balances
@@ -356,14 +421,18 @@ if ($side === 'pay' && $prevApproval !== 'approved') {
 	}
 }
 
-$cashpickup->update($id, [
+$approvalUpdate = [
 	'approval_status' => 'approved',
 	'approved_by' => $actorId,
 	'approved_at' => date('Y-m-d H:i:s'),
 	'denial_reason' => null,
 	'updated_by' => $actorId,
 	'date_updated' => date('Y-m-d H:i:s'),
-]);
+];
+if ($source === 'customer_withdrawal') {
+	$approvalUpdate['receive_id'] = null;
+}
+$cashpickup->update($id, $approvalUpdate);
 if ($cashpickup->has_error) {
 	error_log('[cashpickup] Approval update failed for transaction ' . $id . ': ' . $cashpickup->error);
 	message_fail('Unable to approve this cashpickup. Please try again.');
@@ -403,7 +472,7 @@ if ($side === 'pay' && $prevApproval !== 'approved') {
 							'date_updated' => date('Y-m-d H:i:s'),
 						]);
 						message_fail('Payout denied automatically: unable to apply cashdrawer deduction.');
-						redirect($admin_route.'/'.$plugin_route.'/view/'.(int)($row->receive_id ?? 0));
+						redirect($approvalReturnPath);
 					}
 				} elseif ($pm === 'transfer') {
 					$drawerId = 0;
@@ -642,4 +711,10 @@ if ($side === 'pay') {
 }
 
 message_success('Cashpickup approved');
-redirect($admin_route.'/'.$plugin_route);
+if ($returnToView) {
+	redirect($admin_route.'/'.$plugin_route.'/view/'.$id);
+} elseif ($returnCustomerId > 0) {
+	redirect($admin_route.'/'.$plugin_route.'/customer/'.$returnCustomerId);
+} else {
+	redirect($admin_route.'/'.$plugin_route);
+}

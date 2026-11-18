@@ -907,7 +907,7 @@
 					actionParts.push(`<button type="button" class="btn btn-sm btn-outline-danger rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#rejectTransactionModal" data-reject-url="${editBaseUrl}${encodeURIComponent(row.id)}" data-reject-reference="${escapeHtml(row.reference || row.id || '')}"><i class="fa-solid fa-ban me-1"></i> Reject</button>`);
 				}
 				if (!['Cancelled', 'Canceled', 'Rejected', 'Declined', 'Reversed'].includes(normalizedStatus)) {
-					actionParts.push(`<button type="button" class="btn btn-sm btn-outline-danger rounded-pill px-3 js-direct-cancel" data-id="${row.id}" data-cancel-date="${String(row.date_created || '').slice(0, 10)}" data-cancel-endpoint="${cancelEndpoint}" data-cancel-label="${escapeHtml(row.reference || `Transaction #${row.id}`)}" aria-label="Cancel transaction ${escapeHtml(row.reference || row.id || '')}" title="Cancel transaction"><i class="fa-solid fa-arrow-rotate-left me-1" aria-hidden="true"></i> Cancel</button>`);
+					actionParts.push(`<button type="button" class="btn btn-sm btn-outline-danger rounded-pill px-3 js-direct-cancel" data-id="${row.id}" data-cancel-endpoint="${cancelEndpoint}" data-cancel-label="${escapeHtml(row.reference || `Transaction #${row.id}`)}" aria-label="Cancel transaction ${escapeHtml(row.reference || row.id || '')}" title="Cancel transaction"><i class="fa-solid fa-arrow-rotate-left me-1" aria-hidden="true"></i> Cancel</button>`);
 				}
 				const actions = actionParts.join(' ');
 				const refLabel = escapeHtml(row.reference || row.id || '');
@@ -1402,7 +1402,7 @@
 	})();
 </script>
 <div class="d-none" data-direct-cancel-csrf><?=csrf()?></div>
-<script src="<?=ROOT?>/plugins/reversals/assets/direct-cancel.js?v=20261116-1"></script>
+<script src="<?=ROOT?>/plugins/reversals/assets/direct-cancel.js"></script>
 
 <?php else:?>
 	<div class="alert alert-danger text-center">

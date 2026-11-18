@@ -133,7 +133,7 @@ add_action('basic-admin_main_content',function(){
 	$users = $user->query(
 		"SELECT id, first_name, last_name, disabled
 		 FROM users
-		 WHERE deleted = 0
+		 WHERE deleted = 0 AND COALESCE(disabled, 0) = 0
 		 ORDER BY first_name ASC, last_name ASC"
 	) ?: [];
 

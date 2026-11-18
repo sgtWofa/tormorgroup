@@ -3470,11 +3470,8 @@ add_action('controller', function(){
 
 		$page  = (int)($_GET['page'] ?? 1);
 		if ($page < 1) { $page = 1; }
-		$limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 10;
-		if ($limit < 5) { $limit = 5; }
+		$limit = max(5, min(100, (int)($_GET['limit'] ?? 10)));
 		$pager = new \Core\Pager($limit);
-		$pager->page_number = $page;
-		$pager->offset = ($page - 1) * $limit;
 		$offset = $pager->offset;
 
 		$network = trim($_GET['network'] ?? '');
@@ -3512,22 +3509,6 @@ add_action('controller', function(){
 		    LEFT JOIN users AS u_assigned ON m.assigned = u_assigned.id";
 
 		// Base sims rows mirroring non-AJAX listing, but filtered and paged
-		// Total rows for pager window, using same filters
-		$countSql = "SELECT COUNT(m.id) AS total_rows $fromSql $whereSql";
-		$totalRow = $sim->query($countSql, $params)[0] ?? null;
-		$totalRows = (int)($totalRow->total_rows ?? 0);
-		$totalPages = max(1, (int)ceil($totalRows / $limit));
-		if ($pager->page_number > $totalPages) {
-			$pager->page_number = $totalPages;
-		}
-		$pager->total_pages = $totalPages;
-		$offset = ($pager->page_number - 1) * $limit;
-		$pager->offset = $offset;
-		$currentLink = preg_replace("/page=[0-9]+/", "page=".$pager->page_number, $pager->links['current']);
-		$pager->links['current'] = $currentLink;
-		$nextPage = min($totalPages, $pager->page_number + 1);
-		$pager->links['next'] = preg_replace("/page=[0-9]+/", "page=".$nextPage, $currentLink);
-
 		$query = "
 		    SELECT 
 		        m.*, 
@@ -3545,6 +3526,26 @@ add_action('controller', function(){
 		    ORDER BY m.id DESC LIMIT $limit OFFSET $offset
 		";
 		$sims = $sim->query($query, $params);
+
+		// Total rows for pager window, using same filters
+		$countSql = "SELECT COUNT(m.id) AS total_rows $fromSql $whereSql";
+		$totalRow = $sim->query($countSql, $params)[0] ?? null;
+		$totalRows = (int)($totalRow->total_rows ?? 0);
+		if ($limit > 0 && $totalRows >= 0) {
+			$totalPages = max(1, (int)ceil($totalRows / $limit));
+			// Clamp current page within bounds
+			if ($pager->page_number > $totalPages) {
+				$pager->page_number = $totalPages;
+			}
+			$pager->total_pages = $totalPages;
+			// Fix "next" link so it never goes past the last page
+			$currentLink = $pager->links['current'];
+			$nextPage    = $pager->page_number + 1;
+			if ($nextPage > $totalPages) {
+				$nextPage = $totalPages;
+			}
+			$pager->links['next'] = preg_replace("/page=[0-9]+/", "page=".$nextPage, $currentLink);
+		}
 
 		// Metrics (unassigned, assigned, sold, expired, totals) using same filters
 		$metricsBaseConditions = ['m.deleted = 0'];
@@ -4825,7 +4826,7 @@ add_action('basic-admin_main_content',function(){
 			$sim = new \MyWallets\Sim;
 			$user = new \MyWallets\User;
 			$mywallet_roles_map = new \MyWallets\User_roles_map;
-			$limit = 10;
+			$limit = max(5, min(100, (int)($_GET['limit'] ?? 10)));
 			$pager = new \Core\Pager($limit);
 			$offset = $pager->offset;
 
@@ -5043,30 +5044,31 @@ add_action('basic-admin_main_content',function(){
 
 				$sims = $sim->query($query);
 
-				// Query for total SIMs by network
-				$query = "SELECT network, COUNT(id) AS total_count 
-				          FROM sims 
-				          WHERE (assigned = :user_id OR created_by = :user_id) 
-				          AND deleted = 0 
+				// Admins see inventory-wide network metrics; other users see their own SIMs.
+				$canViewAllSims = user_can('is_admin');
+				$networkScopeSql = $canViewAllSims
+					? 'deleted = 0'
+					: '(assigned = :user_id OR created_by = :user_id) AND deleted = 0';
+				$networkScopeParams = $canViewAllSims ? [] : ['user_id' => $user_id];
+
+				$query = "SELECT network, COUNT(id) AS total_count
+				          FROM sims
+				          WHERE $networkScopeSql
 				          GROUP BY network";
 
-				$total_countSim = $sim->query($query, [
-				    'user_id' => $user_id
-				]);
+				$total_countSim = $sim->query($query, $networkScopeParams);
 
 				// Query for sold SIMs by network
-				$query = "SELECT network, COUNT(id) AS total_count 
-				          FROM sims 
-				          WHERE (assigned = :user_id OR created_by = :user_id) 
-				          AND deleted = 0 
-				          AND (transaction_status = :transaction_status1 OR transaction_status = :transaction_status2) 
+				$query = "SELECT network, COUNT(id) AS total_count
+				          FROM sims
+				          WHERE $networkScopeSql
+				          AND (transaction_status = :transaction_status1 OR transaction_status = :transaction_status2)
 				          GROUP BY network";
 
-				$total_countSold = $sim->query($query, [
-				    'user_id' => $user_id,
+				$total_countSold = $sim->query($query, array_merge($networkScopeParams, [
 				    'transaction_status1' => 'Sold - retail',
 				    'transaction_status2' => 'Sold - wholesale'
-				]);
+				]));
 
 				// Merge results for display
 				$networks = [];

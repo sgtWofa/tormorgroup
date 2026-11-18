@@ -1138,7 +1138,10 @@ add_action('basic-admin_main_content',function(){
 		{
 			$sim = new \Sims\Sim;
 			$sim_roles_map = new \Sims\User_roles_map;
-			$limit = 10;
+			$limit = (int)($_GET['limit'] ?? 10);
+			if (!in_array($limit, [5, 10, 25, 50, 100], true)) {
+				$limit = 10;
+			}
 			$pager = new \Core\Pager($limit);
 			$offset = $pager->offset;
 

@@ -1,37 +1,6 @@
 (function () {
 	'use strict';
 
-	function getTodayInAccra() {
-		const parts = new Intl.DateTimeFormat('en', {
-			timeZone: 'Africa/Accra',
-			year: 'numeric',
-			month: '2-digit',
-			day: '2-digit',
-		}).formatToParts(new Date());
-		const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
-		return `${values.year}-${values.month}-${values.day}`;
-	}
-
-	function isCreatedToday(value, today = getTodayInAccra()) {
-		const createdDate = String(value || '').trim().slice(0, 10);
-		return createdDate !== '' && createdDate === today;
-	}
-
-	function hideOlderCancelButtons() {
-		const today = getTodayInAccra();
-		document.querySelectorAll('.js-direct-cancel').forEach(button => {
-			if (!isCreatedToday(button.dataset.cancelDate, today)) {
-				button.remove();
-			}
-		});
-	}
-
-	hideOlderCancelButtons();
-	if (document.body) {
-		new MutationObserver(hideOlderCancelButtons).observe(document.body, { childList: true, subtree: true });
-		window.setInterval(hideOlderCancelButtons, 60_000);
-	}
-
 	const csrfField = document.querySelector('[data-direct-cancel-csrf] input[name="csrf"]');
 	if (!csrfField) {
 		return;
@@ -99,10 +68,6 @@
 	document.addEventListener('click', function (event) {
 		const button = event.target.closest('.js-direct-cancel');
 		if (!button) {
-			return;
-		}
-		if (!isCreatedToday(button.dataset.cancelDate)) {
-			button.remove();
 			return;
 		}
 		event.preventDefault();

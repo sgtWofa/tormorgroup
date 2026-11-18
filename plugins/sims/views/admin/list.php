@@ -695,11 +695,11 @@ body[data-bs-theme='light'] .sim-analytics .leaderboard-card {
         <form id="simFiltersForm" class="w-100">
             <!-- Basic Filters Row -->
             <div class="row g-3 align-items-end mb-3">
-                <div class="col-md-5">
+                <div class="col-md-4">
                     <label class="form-label text-muted small fw-semibold text-uppercase mb-1">Keyword</label>
                     <input type="text" class="form-control" name="find" id="simFilterFind" placeholder="Serial / buyer / status / assigned" value="<?= esc($_GET['find'] ?? '') ?>">
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label class="form-label text-muted small fw-semibold text-uppercase mb-1">Status</label>
                     <select class="form-select" name="status" id="simFilterStatus">
                         <option value="">All statuses</option>
@@ -713,6 +713,15 @@ body[data-bs-theme='light'] .sim-analytics .leaderboard-card {
                             'Rejected'
                         ] as $statusOption): ?>
                             <option value="<?= esc($statusOption) ?>" <?= esc($_GET['status'] ?? '') === $statusOption ? 'selected' : '' ?>><?= esc($statusOption) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label text-muted small fw-semibold text-uppercase mb-1" for="simFilterLimit">Items per page</label>
+                    <?php $itemsPerPage = (int)($_GET['limit'] ?? 10); ?>
+                    <select class="form-select" name="limit" id="simFilterLimit">
+                        <?php foreach ([5, 10, 25, 50, 100] as $limitOption): ?>
+                            <option value="<?=$limitOption?>" <?=$itemsPerPage === $limitOption ? 'selected' : ''?>><?=$limitOption?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
@@ -1066,18 +1075,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function attachPagerLinks() {
-        if (!pagerWrapper || pagerWrapper.dataset.pagerClickBound) return;
-        pagerWrapper.dataset.pagerClickBound = '1';
-        pagerWrapper.addEventListener('click', (event) => {
-            if (!(event.target instanceof Element)) return;
-            const link = event.target.closest('a.sim-page-control:not(.is-disabled)');
-            if (!link || !pagerWrapper.contains(link)) return;
-
-            event.preventDefault();
-            const pageUrl = new URL(link.href, window.location.href);
-            pageUrl.searchParams.delete('ajax');
-            pageUrl.searchParams.delete('__ajax');
-            window.location.assign(pageUrl.toString());
+        if (!pagerWrapper) return;
+        pagerWrapper.querySelectorAll('a.sim-page-control:not(.is-disabled):not([data-pager-attached])').forEach(link => {
+            link.dataset.pagerAttached = '1';
+            link.addEventListener('click', async (event) => {
+                event.preventDefault();
+                const url = new URL(link.href, window.location.origin);
+                url.searchParams.set('ajax', '1');
+                await fetchFilteredRows(url.toString());
+            });
         });
     }
 
@@ -1190,11 +1196,21 @@ document.addEventListener('DOMContentLoaded', () => {
             await fetchFilteredRows(url.toString());
         });
 
+        const pageSizeSelect = document.getElementById('simFilterLimit');
+        if (pageSizeSelect) {
+            pageSizeSelect.addEventListener('change', () => {
+                filterForm.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+            });
+        }
+
         const resetButton = document.getElementById('simFilterReset');
         if (resetButton) {
             resetButton.addEventListener('click', async (event) => {
                 event.preventDefault();
                 filterForm.reset();
+                if (pageSizeSelect) {
+                    pageSizeSelect.value = '10';
+                }
                 const url = new URL(window.location.href);
                 url.searchParams.delete('find');
                 url.searchParams.delete('status');
@@ -1205,6 +1221,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 url.searchParams.delete('date_start');
                 url.searchParams.delete('date_end');
                 url.searchParams.delete('page');
+                url.searchParams.delete('limit');
                 url.searchParams.set('ajax', '1');
                 await fetchFilteredRows(url.toString());
             });

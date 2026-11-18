@@ -69,14 +69,17 @@
 		<div class="flex-grow-1 ops-sims-search" style="max-width: 260px;">
 			<input type="text" class="form-control form-control-sm" data-role="ops-sim-search" placeholder="Search SIM, serial or ID">
 		</div>
-		<div class="ops-sims-page-size">
-			<select class="form-select form-select-sm w-auto" data-role="ops-page-size">
+		<div class="ops-sims-page-size d-flex align-items-center gap-2">
+			<label class="small text-muted mb-0 d-flex align-items-center gap-2">Items per page
+			<select class="form-select form-select-sm w-auto" data-role="ops-page-size" aria-label="Items per page">
 				<?php $pageLimit = isset($pager) ? (int)$pager->limit : 10; ?>
 				<option value="5"  <?=$pageLimit == 5  ? 'selected' : ''?>>5</option>
 				<option value="10" <?=$pageLimit == 10 ? 'selected' : ''?>>10</option>
 				<option value="25" <?=$pageLimit == 25 ? 'selected' : ''?>>25</option>
 				<option value="50" <?=$pageLimit == 50 ? 'selected' : ''?>>50</option>
+				<option value="100" <?=$pageLimit == 100 ? 'selected' : ''?>>100</option>
 			</select>
+			</label>
 		</div>
 	</div>
 

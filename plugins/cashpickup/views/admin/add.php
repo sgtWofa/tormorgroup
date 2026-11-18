@@ -1410,7 +1410,7 @@
 				if(lookupError) lookupError.textContent = 'Looking up...';
 				try{
 					const url = `<?=ROOT?>/<?=$admin_route?>/<?=$plugin_route?>/lookup?customer_number=${encodeURIComponent(customer)}&tracking_id=${encodeURIComponent(tracking)}`;
-					const res = await fetch(url, {headers: {'Accept':'application/json'}});
+					const res = await fetch(url, {cache: 'no-store', headers: {'Accept':'application/json'}});
 					const json = await res.json();
 					if(!json || !json.success){
 						if(lookupError) lookupError.textContent = (json && json.message) ? json.message : 'No matching receive record found';

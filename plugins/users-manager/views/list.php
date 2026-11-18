@@ -34,6 +34,8 @@
 		.users-stat-card{border-radius:1rem;border:1px solid rgba(15,23,42,.08);background:var(--bs-body-bg);padding:1.25rem;display:flex;justify-content:space-between;align-items:center;gap:1rem;}
 		.users-stat-card h3{font-weight:700;margin-bottom:.25rem;}
 		.users-stat-icon{width:44px;height:44px;border-radius:999px;background:rgba(var(--bs-primary-rgb,13,110,253),.12);color:var(--bs-primary);display:inline-flex;align-items:center;justify-content:center;}
+		.users-table-responsive{overflow:visible!important;}
+		.users-table-responsive .dropdown-menu{z-index:1060;}
 		body[data-bs-theme="dark"] .users-hero .text-muted{color:rgba(255,255,255,.88)!important;font-weight:600;}
 		body[data-bs-theme="dark"] .users-hero h1{color:#fef08a;font-weight:700;}
 		body[data-bs-theme="dark"] .users-stat-icon{background:rgba(247,201,72,.18)!important;color:#f7c948!important;font-weight:700;}
@@ -237,7 +239,7 @@
 					<?php endif;?>
 				</div>
 
-				<div class="table-responsive d-none d-lg-block">
+				<div class="table-responsive users-table-responsive d-none d-lg-block">
 					<table class="table align-middle table-hover mb-0">
 						<thead class="">
 							<tr>

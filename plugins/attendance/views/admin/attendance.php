@@ -688,6 +688,7 @@
 						<h5>Analytics Sheet</h5>
 						<div class="text-muted" id="analyticsMeta" style="font-size:0.85rem;"></div>
 					</div>
+					<ul class="nav nav-pills gap-2 mt-2" id="analyticsUserTabs" role="tablist"></ul>
 					<div class="table-responsive mt-2">
 						<table class="table table-hover analytics-table" id="analyticsTable">
 							<thead>
@@ -1238,31 +1239,49 @@
 
         function loadAttendanceData(unmarkedData, markedData, date) {
             var formattedDate = formatLongDate(date);
-            var html = '<div class="attendance-row">';
+            var activeUnmarked = (unmarkedData || []).filter(function(user){ return !isDisabledUser(user); });
+            var activeMarked = (markedData || []).filter(function(user){ return !isDisabledUser(user); });
+            var disabledMarked = (markedData || []).filter(isDisabledUser);
+            var html = '<ul class="nav nav-pills gap-2 mb-3" role="tablist">'
+                + '<li class="nav-item"><button type="button" class="nav-link active" data-attendance-status="active">Active staff</button></li>'
+                + '<li class="nav-item"><button type="button" class="nav-link" data-attendance-status="disabled">Disabled staff (' + disabledMarked.length + ')</button></li>'
+                + '</ul>';
 
-            // Only render the “NOT MARKED” card if there are any unmarked users
-            if (unmarkedData.length > 0) {
-                html += ''
-                    + '<div class="attendance-card card-unmarked">'
-                    + '<div class="card-header"><i class="fa fa-user-times attendance-icon"></i> NOT MARKED (' + unmarkedData.length + ') — ' + formattedDate + '</div>'
-                    + '<div class="card-body">'
-                    + '<div id="unmarkedContainer_' + date + '">' + (window.buildTableHTML ? window.buildTableHTML(unmarkedData, true, date) : '') + '</div>'
-                    + '<button class="btn btn-sm btn-danger mt-2" id="submitAttendance_' + date + '"><i class="fa fa-check-circle"></i> Submit</button>'
-                    + '</div>'
-                    + '</div>';
+            function renderDailyCards(unmarked, marked, includeMarking) {
+                var cards = '<div class="attendance-row">';
+                if (includeMarking && unmarked.length > 0) {
+                    cards += ''
+                        + '<div class="attendance-card card-unmarked">'
+                        + '<div class="card-header"><i class="fa fa-user-times attendance-icon"></i> NOT MARKED (' + unmarked.length + ') — ' + formattedDate + '</div>'
+                        + '<div class="card-body">'
+                        + '<div id="unmarkedContainer_' + date + '">' + (window.buildTableHTML ? window.buildTableHTML(unmarked, true, date) : '') + '</div>'
+                        + '<button class="btn btn-sm btn-danger mt-2" id="submitAttendance_' + date + '"><i class="fa fa-check-circle"></i> Submit</button>'
+                        + '</div>'
+                        + '</div>';
+                }
+                cards += ''
+                    + '<div class="attendance-card card-marked">'
+                    + '<div class="card-header"><i class="fa fa-user-check attendance-icon"></i> MARKED (' + marked.length + ') — ' + formattedDate + '</div>'
+                    + '<div class="card-body">' + (marked.length && window.buildTableHTML ? window.buildTableHTML(marked, false, date) : '<div class="text-muted">No attendance records for this date.</div>') + '</div>'
+                    + '</div></div>';
+                return cards;
             }
 
-            // Always render the “MARKED” card
-            html += ''
-                + '<div class="attendance-card card-marked">'
-                + '<div class="card-header"><i class="fa fa-user-check attendance-icon"></i> MARKED (' + markedData.length + ') — ' + formattedDate + '</div>'
-                + '<div class="card-body">' + (window.buildTableHTML ? window.buildTableHTML(markedData, false, date) : '') + '</div>'
-                + '</div>';
-
-            html += '</div>'; // .attendance-row
-
+            html += '<div data-attendance-status-panel="active">' + renderDailyCards(activeUnmarked, activeMarked, true) + '</div>';
+            html += '<div data-attendance-status-panel="disabled" hidden>' + renderDailyCards([], disabledMarked, false) + '</div>';
             attendanceCards.innerHTML = html;
-            if (window.attachSubmitAttendanceForGroup) window.attachSubmitAttendanceForGroup(date);
+            attendanceCards.querySelectorAll('[data-attendance-status]').forEach(function(button){
+                button.addEventListener('click', function(){
+                    var status = button.getAttribute('data-attendance-status');
+                    attendanceCards.querySelectorAll('[data-attendance-status]').forEach(function(tab){
+                        tab.classList.toggle('active', tab === button);
+                    });
+                    attendanceCards.querySelectorAll('[data-attendance-status-panel]').forEach(function(panel){
+                        panel.hidden = panel.getAttribute('data-attendance-status-panel') !== status;
+                    });
+                });
+            });
+            if (window.attachSubmitAttendanceForGroup && activeUnmarked.length > 0) window.attachSubmitAttendanceForGroup(date);
         }
 
         function loadGroupedAttendanceData(groupedData) {
@@ -1400,6 +1419,9 @@
 			}).sort(function(a,b){
 				return a.name.localeCompare(b.name);
 			});
+			var allRegisterUsers = users;
+			var activeRegisterUsers = allRegisterUsers.filter(function(user){ return !user.disabled; });
+			var disabledRegisterUsers = allRegisterUsers.filter(function(user){ return user.disabled; });
 
 			var monthGroups = [];
 			var currentKey = '';
@@ -1430,6 +1452,10 @@
 			html += '<div class="d-flex align-items-center gap-2"><i class="fa fa-clipboard-list attendance-icon"></i><span>Register Sheet</span></div>';
 			html += '<div class="d-flex align-items-center gap-2 flex-wrap">' + legendHtml + '<button type="button" class="btn btn-sm btn-outline-success" id="attExportExcel"><i class="fa fa-file-excel"></i> Excel</button><button type="button" class="btn btn-sm btn-outline-danger" id="attExportPdf"><i class="fa fa-file-pdf"></i> PDF</button></div>';
 			html += '</div>';
+			html += '<ul class="nav nav-pills gap-2 p-3 pb-0" role="tablist">';
+			html += '<li class="nav-item"><button type="button" class="nav-link active" data-attendance-user-status="active">Active staff (' + activeRegisterUsers.length + ')</button></li>';
+			html += '<li class="nav-item"><button type="button" class="nav-link" data-attendance-user-status="disabled">Disabled staff (' + disabledRegisterUsers.length + ')</button></li>';
+			html += '</ul>';
 			html += '<div class="card-body p-0">';
 			html += '<div class="att-register-wrap">';
 			html += '<div class="att-register-scroll">';
@@ -1469,7 +1495,7 @@
 				}
 				nameHtml += '<div class="fw-semibold">' + esc(u.name) + disabledBadgeHtml(u) + '</div>';
 				nameHtml += '</div>';
-				html += '<tr>';
+				html += '<tr data-attendance-user-row data-disabled="' + (u.disabled ? '1' : '0') + '"' + (u.disabled ? ' hidden' : '') + '>';
 				html += '<td class="att-sticky-col">' + nameHtml + '</td>';
 				dates.forEach(function(d){
 					var cell = (statusByUserDate[u.id] && statusByUserDate[u.id][d]) ? statusByUserDate[u.id][d] : null;
@@ -1508,6 +1534,19 @@
 			html += '</div>';
 			html += '</div>';
 			attendanceCards.innerHTML = html;
+			users = activeRegisterUsers;
+			attendanceCards.querySelectorAll('[data-attendance-user-status]').forEach(function(button){
+				button.addEventListener('click', function(){
+					var status = button.getAttribute('data-attendance-user-status');
+					users = status === 'disabled' ? disabledRegisterUsers : activeRegisterUsers;
+					attendanceCards.querySelectorAll('[data-attendance-user-status]').forEach(function(tab){
+						tab.classList.toggle('active', tab === button);
+					});
+					attendanceCards.querySelectorAll('[data-attendance-user-row]').forEach(function(row){
+						row.hidden = (row.getAttribute('data-disabled') === '1') !== (status === 'disabled');
+					});
+				});
+			});
 
 			function buildExportMatrix(useIcons){
 				function remarkToCell(remark){
@@ -2660,66 +2699,85 @@
             var table = document.getElementById('analyticsTable');
             if (!table) return;
 
-            try {
-                if (typeof $ !== 'undefined' && $.fn && $.fn.DataTable && $.fn.DataTable.isDataTable(table)) {
-                    $(table).DataTable().destroy();
-                }
-            } catch (e) { }
-
             var tbody = table.querySelector('tbody') || document.getElementById('analyticsTableBody');
             if (!tbody) return;
             analyticsTableBody = tbody;
 
-            var data = Array.isArray(rows) ? rows.slice() : [];
-            data.sort(function (a, b) {
-                var bRate = parseFloat(b.attendance_rate || 0);
-                var aRate = parseFloat(a.attendance_rate || 0);
-                if (bRate !== aRate) {
-                    return bRate - aRate;
-                }
+            var allData = Array.isArray(rows) ? rows.slice() : [];
+            var activeData = allData.filter(function(user){ return !isDisabledUser(user); });
+            var disabledData = allData.filter(isDisabledUser);
+            var tabs = document.getElementById('analyticsUserTabs');
+            if (tabs) {
+                tabs.innerHTML = ''
+                    + '<li class="nav-item"><button type="button" class="nav-link active" data-analytics-user-status="active">Active staff (' + activeData.length + ')</button></li>'
+                    + '<li class="nav-item"><button type="button" class="nav-link" data-analytics-user-status="disabled">Disabled staff (' + disabledData.length + ')</button></li>';
+            }
 
-                var bPresent = parseFloat(b.present_days || 0);
-                var aPresent = parseFloat(a.present_days || 0);
-                if (bPresent !== aPresent) {
-                    return bPresent - aPresent;
-                }
+            function renderRows(status) {
+                try {
+                    if (typeof $ !== 'undefined' && $.fn && $.fn.DataTable && $.fn.DataTable.isDataTable(table)) {
+                        $(table).DataTable().destroy();
+                    }
+                } catch (e) { }
 
-                return parseFloat(b.late_days || 0) - parseFloat(a.late_days || 0);
-            });
-            var html = '';
-            data.forEach(function (u, idx) {
-                var fullName = ((u.first_name || '') + ' ' + (u.last_name || '')).replace(/\s+/g, ' ').trim();
-                var nameHtml = fullName + disabledBadgeHtml(u);
-                var rate = (typeof u.attendance_rate === 'number') ? u.attendance_rate : parseFloat(u.attendance_rate || 0);
-                var pillClass = 'bg-secondary';
-                if (rate >= 90) pillClass = 'bg-success';
-                else if (rate >= 70) pillClass = 'bg-primary';
-                else if (rate >= 50) pillClass = 'bg-warning text-dark';
-                else pillClass = 'bg-danger';
+                var data = (status === 'disabled' ? disabledData : activeData).slice();
+                data.sort(function (a, b) {
+                    var bRate = parseFloat(b.attendance_rate || 0);
+                    var aRate = parseFloat(a.attendance_rate || 0);
+                    if (bRate !== aRate) return bRate - aRate;
+                    var bPresent = parseFloat(b.present_days || 0);
+                    var aPresent = parseFloat(a.present_days || 0);
+                    if (bPresent !== aPresent) return bPresent - aPresent;
+                    return parseFloat(b.late_days || 0) - parseFloat(a.late_days || 0);
+                });
+                var html = '';
+                data.forEach(function (u, idx) {
+                    var fullName = ((u.first_name || '') + ' ' + (u.last_name || '')).replace(/\s+/g, ' ').trim();
+                    var nameHtml = fullName + disabledBadgeHtml(u);
+                    var rate = (typeof u.attendance_rate === 'number') ? u.attendance_rate : parseFloat(u.attendance_rate || 0);
+                    var pillClass = 'bg-secondary';
+                    if (rate >= 90) pillClass = 'bg-success';
+                    else if (rate >= 70) pillClass = 'bg-primary';
+                    else if (rate >= 50) pillClass = 'bg-warning text-dark';
+                    else pillClass = 'bg-danger';
 
-                html += ''
-                    + '<tr>'
-                    + '<td>' + (idx + 1) + '</td>'
-                    + '<td><img src="' + u.image + '" data-app-image-viewer data-app-image="' + u.image + '" class="img-thumbnail" style="width:30px; height:30px; cursor:pointer;"> ' + nameHtml + '</td>'
-                    + '<td><span class="badge bg-success">' + u.present_days + '</span></td>'
-					+ '<td><span class="badge bg-warning text-dark">' + (u.late_days || 0) + '</span></td>'
-                    + '<td><span class="badge bg-danger">' + u.absent_days + '</span></td>'
-                    + '<td><span class="badge bg-secondary">' + u.unmarked_days + '</span></td>'
-                    + '<td>' + u.total_days + '</td>'
-                    + '<td><span class="rate-pill ' + pillClass + '">' + rate + '%</span></td>'
-                    + '</tr>';
-            });
-            tbody.innerHTML = html;
+                    html += ''
+                        + '<tr>'
+                        + '<td>' + (idx + 1) + '</td>'
+                        + '<td><img src="' + u.image + '" data-app-image-viewer data-app-image="' + u.image + '" class="img-thumbnail" style="width:30px; height:30px; cursor:pointer;"> ' + nameHtml + '</td>'
+                        + '<td><span class="badge bg-success">' + u.present_days + '</span></td>'
+                        + '<td><span class="badge bg-warning text-dark">' + (u.late_days || 0) + '</span></td>'
+                        + '<td><span class="badge bg-danger">' + u.absent_days + '</span></td>'
+                        + '<td><span class="badge bg-secondary">' + u.unmarked_days + '</span></td>'
+                        + '<td>' + u.total_days + '</td>'
+                        + '<td><span class="rate-pill ' + pillClass + '">' + rate + '%</span></td>'
+                        + '</tr>';
+                });
+                tbody.innerHTML = html || '<tr><td colspan="8" class="text-center text-muted">No users in this tab.</td></tr>';
 
-            try {
-                if (typeof $ !== 'undefined' && $.fn && $.fn.DataTable) {
-                    $(table).DataTable({
-                        pageLength: -1,
-                        lengthMenu: [[-1, 10, 25, 50, 100], ['All', 10, 25, 50, 100]],
-						order: [[7, 'desc']]
+                try {
+                    if (typeof $ !== 'undefined' && $.fn && $.fn.DataTable) {
+                        $(table).DataTable({
+                            pageLength: -1,
+                            lengthMenu: [[-1, 10, 25, 50, 100], ['All', 10, 25, 50, 100]],
+                            order: [[7, 'desc']]
+                        });
+                    }
+                } catch (e) { }
+            }
+
+            if (tabs) {
+                tabs.querySelectorAll('[data-analytics-user-status]').forEach(function(button){
+                    button.addEventListener('click', function(){
+                        var status = button.getAttribute('data-analytics-user-status');
+                        tabs.querySelectorAll('[data-analytics-user-status]').forEach(function(tab){
+                            tab.classList.toggle('active', tab === button);
+                        });
+                        renderRows(status);
                     });
-                }
-            } catch (e) { }
+                });
+            }
+            renderRows('active');
         }
 
         function renderAnalyticsCharts(meta, rows) {
@@ -2789,7 +2847,7 @@
                     var aCombinedRate = percentOfTotalDays((a.present_days || 0) + (a.late_days || 0), a.total_days || totalDays);
                     return bCombinedRate - aCombinedRate;
                 });
-                var top = list.slice(0, 10);
+                var top = list.filter(function(user){ return !isDisabledUser(user); }).slice(0, 10);
                 var labels = top.map(function (u) {
                     var label = ((u.first_name || '') + ' ' + (u.last_name || '')).replace(/\s+/g, ' ').trim();
                     return isDisabledUser(u) ? (label + ' (Disabled)') : label;
@@ -2935,7 +2993,9 @@
                         analyticsRangeLabel.textContent = formatLongDate(meta.startDate || startDate) + ' — ' + formatLongDate(meta.endDate || endDate);
                     }
                     if (analyticsMeta) {
-                        analyticsMeta.textContent = (meta.users || 0) + ' users • ' + (meta.totalDays || 0) + ' days';
+                        var activeCount = data.filter(function(user){ return !isDisabledUser(user); }).length;
+                        var disabledCount = data.filter(isDisabledUser).length;
+                        analyticsMeta.textContent = activeCount + ' active • ' + disabledCount + ' disabled • ' + (meta.totalDays || 0) + ' days';
                     }
                     renderAnalyticsKpis(meta);
                     renderAnalyticsTable(data);

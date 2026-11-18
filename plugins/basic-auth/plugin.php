@@ -70,6 +70,65 @@ if(!function_exists('basic_auth_ensure_user_disabled_column'))
 
 //basic_auth_ensure_user_disabled_column();
 
+if(!function_exists('basic_auth_ensure_force_password_change_column'))
+{
+	function basic_auth_ensure_force_password_change_column(): bool
+	{
+		static $resolved = null;
+		if ($resolved !== null) {
+			return $resolved;
+		}
+
+		try {
+			$db = new \Core\Database;
+			$columns = $db->query("SHOW COLUMNS FROM users LIKE 'force_password_change'");
+			if ($db->has_error) {
+				throw new \RuntimeException($db->error);
+			}
+			if (empty($columns)) {
+				$db->query("ALTER TABLE users ADD COLUMN force_password_change TINYINT(1) UNSIGNED NOT NULL DEFAULT 0 AFTER password");
+				if ($db->has_error) {
+					$alterError = $db->error;
+					$columns = $db->query("SHOW COLUMNS FROM users LIKE 'force_password_change'");
+					if ($db->has_error || empty($columns)) {
+						throw new \RuntimeException($alterError);
+					}
+				}
+			}
+			$resolved = true;
+		} catch (\Throwable $e) {
+			error_log('[basic-auth] Forced password change column check failed: ' . $e->getMessage());
+			$resolved = false;
+		}
+
+		return $resolved;
+	}
+}
+
+basic_auth_ensure_force_password_change_column();
+
+add_action('before_controller', function(){
+	$session = get_session();
+	$userId = (int)($session->id ?? 0);
+	if ($userId <= 0 || (int)($session->force_password_change ?? 0) !== 1) {
+		return;
+	}
+
+	if (strtolower((string)page()) === 'logout') {
+		return;
+	}
+
+	$isPasswordChangeRoute = strtolower((string)page()) === 'admin'
+		&& strtolower((string)(URL(1) ?? '')) === 'profile'
+		&& strtolower((string)(URL(2) ?? '')) === 'resetpassword'
+		&& (int)(URL(3) ?? 0) === $userId;
+	if ($isPasswordChangeRoute) {
+		return;
+	}
+
+	redirect('admin/profile/resetpassword/' . $userId);
+});
+
 /** run this after a form submit **/
 add_action('controller',function(){
 

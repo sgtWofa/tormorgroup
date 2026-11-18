@@ -58,7 +58,17 @@
 	} catch (\Throwable $e) {}
 	$isGeneralManager = !empty(array_intersect($roleNames, ['general manager', 'general_manager', 'generalmanager', 'gm', 'is_general_manager']));
 	$isOperationsManager = !empty(array_intersect($roleNames, ['operations manager', 'operations_manager', 'operationsmanager', 'ops manager', 'ops_manager', 'opsmanager', 'is_operations_manager']));
-	$canApproveDeny = (user_can('is_admin') || $isGeneralManager);
+	$canApproveDeny = (user_can('is_admin')
+		|| user_can('is_general_manager')
+		|| user_can('is_operations_manager')
+		|| $isGeneralManager
+		|| $isOperationsManager);
+	$canApproveCashpickup = !$isModal
+		&& $canApproveDeny
+		&& $approvalStatus === 'pending'
+		&& !$isCreditPayout
+		&& preg_match('/denied|deny|rejected|reject|declined|decline|cancelled|canceled|reversed/i', $cancelStatuses) !== 1;
+	$canRejectCashpickup = $canApproveCashpickup;
 	$canEditCashpickup = (user_can('is_admin') || user_can('is_manager'));
 	$customerLedgerId = (int)($row->customer_id ?? 0);
 	if ($side === 'receive' && !$isCreditPayout && $customerLedgerId <= 0) {
@@ -618,6 +628,23 @@
 		<div class="text-muted small">#<?=esc($row->id)?> | <?=esc((string)($row->date_created ?? $row->date ?? ''))?></div>
 	</div>
 	<div class="d-flex gap-2">
+	<?php if($canApproveCashpickup): ?>
+		<form method="post" action="<?=ROOT?>/<?=$admin_route?>/<?=$plugin_route?>/approve/<?=esc((string)($row->id ?? 0))?>" class="d-inline">
+			<?=$csrfField?>
+			<input type="hidden" name="return_to_view" value="1">
+			<?php if($customerLedgerId > 0): ?>
+				<input type="hidden" name="customer_id" value="<?=$customerLedgerId?>">
+			<?php endif; ?>
+			<button class="btn btn-success" type="submit"><i class="fa fa-check me-1" aria-hidden="true"></i>Approve</button>
+		</form>
+	<?php endif; ?>
+	<?php if($canRejectCashpickup): ?>
+		<button class="btn btn-outline-danger" type="button" data-cashpickup-deny
+			data-deny-url="<?=ROOT?>/<?=$admin_route?>/<?=$plugin_route?>/deny/<?=esc((string)($row->id ?? 0))?>"
+			data-transaction-id="<?=esc((string)($row->id ?? 0))?>">
+			<i class="fa fa-times me-1" aria-hidden="true"></i>Reject
+		</button>
+	<?php endif; ?>
 	<?php if($canCancelCashpickup): ?>
 		<button class="btn btn-outline-danger" type="button" data-cashpickup-cancel data-cancel-url="<?=ROOT?>/<?=$admin_route?>/<?=$plugin_route?>/cancel/<?=esc((string)($row->id ?? 0))?>" data-transaction-id="<?=esc((string)($row->id ?? 0))?>">
 			<i class="fa fa-ban me-1" aria-hidden="true"></i> Cancel transaction
@@ -636,6 +663,57 @@
 </div>
 <?php if($canCancelCashpickup): ?>
 	<?php require plugin_path('views/admin/cancel-modal.php'); ?>
+<?php endif; ?>
+<?php if($canRejectCashpickup): ?>
+	<div class="modal fade" id="cashpickupDenyModal" tabindex="-1" aria-labelledby="cashpickupDenyTitle" aria-hidden="true">
+		<div class="modal-dialog modal-dialog-centered">
+			<div class="modal-content">
+				<div class="modal-header">
+					<h5 class="modal-title" id="cashpickupDenyTitle">Reject transaction</h5>
+					<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+				</div>
+				<form method="post" id="cashpickupDenyForm">
+					<div class="modal-body">
+						<?=csrf()?>
+						<input type="hidden" name="return_to_view" value="1">
+						<?php if($customerLedgerId > 0): ?>
+							<input type="hidden" name="customer_id" value="<?=$customerLedgerId?>">
+						<?php endif; ?>
+						<div class="small text-muted mb-2">Transaction <span class="fw-semibold" id="cashpickupDenyTransactionId"></span></div>
+						<label class="form-label" for="cashpickupDenialReason">Reason for rejection <span class="text-danger">*</span></label>
+						<textarea class="form-control" id="cashpickupDenialReason" name="denial_reason" rows="3" maxlength="500" required></textarea>
+					</div>
+					<div class="modal-footer">
+						<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Keep transaction</button>
+						<button type="submit" class="btn btn-danger"><i class="fa fa-times me-1" aria-hidden="true"></i>Reject transaction</button>
+					</div>
+				</form>
+			</div>
+		</div>
+	</div>
+	<script>
+		(function(){
+			const modalEl = document.getElementById('cashpickupDenyModal');
+			const formEl = document.getElementById('cashpickupDenyForm');
+			const reasonEl = document.getElementById('cashpickupDenialReason');
+			const transactionEl = document.getElementById('cashpickupDenyTransactionId');
+			if(!modalEl || !formEl) return;
+
+			document.addEventListener('click', function(event){
+				const trigger = event.target && event.target.closest ? event.target.closest('[data-cashpickup-deny]') : null;
+				if(!trigger || !window.bootstrap || !bootstrap.Modal) return;
+				event.preventDefault();
+				formEl.action = trigger.getAttribute('data-deny-url') || '';
+				if(transactionEl) transactionEl.textContent = '#' + (trigger.getAttribute('data-transaction-id') || '');
+				if(reasonEl) reasonEl.value = '';
+				bootstrap.Modal.getOrCreateInstance(modalEl).show();
+			});
+
+			modalEl.addEventListener('shown.bs.modal', function(){
+				if(reasonEl) reasonEl.focus();
+			});
+		})();
+	</script>
 <?php endif; ?>
 
 <div class="row g-3">
@@ -872,9 +950,7 @@
 							<thead>
 								<tr>
 									<th>Date</th>
-									<th>Source</th>
 									<th class="text-end">Received</th>
-									<th>Status</th>
 									<th>Created by</th>
 									<th class="text-end">View</th>
 								</tr>
@@ -896,10 +972,12 @@
 										}
 									?>
 									<tr>
-										<td><?=esc((string)($rx->date_created ?? ''))?></td>
-										<td><?=esc($rxSource)?></td>
-										<td class="text-end"><?=number_format((float)($rx->amount_involved ?? 0), 2)?></td>
 										<td>
+											<div><?=esc((string)($rx->date_created ?? ''))?></div>
+											<div class="small text-body-secondary">Source: <?=esc($rxSource !== '' ? $rxSource : '—')?></div>
+										</td>
+										<td class="text-end">
+											<div class="fw-semibold"><?=number_format((float)($rx->amount_involved ?? 0), 2)?></div>
 											<?php if($rxDisplayApproval === 'approved'): ?>
 												<span class="badge bg-success">Approved</span>
 											<?php elseif($rxDisplayApproval === 'reversed'): ?>
@@ -1024,11 +1102,7 @@
 								<tr>
 									<th>Date</th>
 									<th class="text-end">Requested</th>
-									<th class="text-end">Charge</th>
-									<th class="text-end">Paid out</th>
-									<th>Method</th>
 									<th>Confirmed by</th>
-									<th>Status</th>
 									<th class="text-end">View</th>
 									<th class="text-end">Action</th>
 								</tr>
@@ -1046,12 +1120,14 @@
 									?>
 									<tr>
 										<td><?=esc($p->date_created ?? '')?></td>
-										<td class="text-end"><?=number_format((float)($p->amount_requested ?? 0), 2)?></td>
-										<td class="text-end"><?=number_format((float)($p->pickup_charge ?? 0), 2)?></td>
-										<td class="text-end"><?=number_format((float)($p->amount_paid_out ?? 0), 2)?></td>
-										<td><?=esc($p->payment_method ?? '')?></td>
-										<td><?=esc($p->confirmed_by ?? '')?></td>
+										<td class="text-end">
+											<div class="fw-semibold"><?=number_format((float)($p->amount_requested ?? 0), 2)?></div>
+											<div class="small text-body-secondary">Charge: <?=number_format((float)($p->pickup_charge ?? 0), 2)?></div>
+											<div class="small text-body-secondary">Paid out: <?=number_format((float)($p->amount_paid_out ?? 0), 2)?></div>
+										</td>
 										<td>
+											<div class="fw-semibold"><?=esc(trim((string)($p->payment_method ?? '')) !== '' ? (string)$p->payment_method : '—')?></div>
+											<div class="small text-body-secondary">Confirmed by: <?=esc(trim((string)($p->confirmed_by ?? '')) !== '' ? (string)$p->confirmed_by : '—')?></div>
 											<?php if($pApproval === 'approved'): ?>
 												<span class="badge bg-success">Approved</span>
 											<?php elseif($pApproval === 'reversed'): ?>

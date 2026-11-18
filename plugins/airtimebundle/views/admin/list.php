@@ -9,7 +9,6 @@ $canDelete = user_can('delete_category');
 
 $session = get_session();
 $currentUserId = (int)($session->id ?? 0);
-$todayDate = (new \DateTimeImmutable('now', new \DateTimeZone('Africa/Accra')))->format('Y-m-d');
 
 $agentOptions = $users ?? [];
 ?>
@@ -411,8 +410,8 @@ $agentOptions = $users ?? [];
 												</a>
 												<?php endif;?>
 											<?php endif;?>
-											<?php if(substr(trim((string)($row->date_created ?? '')), 0, 10) === $todayDate && !in_array(strtolower(trim((string)($row->transaction_status ?? ''))), ['cancelled','canceled','declined','rejected','reversed'], true)):?>
-												<button type="button" class="btn btn-outline-danger btn-sm js-direct-cancel" data-id="<?= (int)$row->id ?>" data-cancel-date="<?= htmlspecialchars(substr(trim((string)($row->date_created ?? '')), 0, 10), ENT_QUOTES, 'UTF-8') ?>" data-cancel-endpoint="<?=ROOT?>/<?=$admin_route?>/<?=$pluginRoute?>/cancel" data-cancel-label="Transaction #<?= (int)$row->id ?>" aria-label="Cancel transaction #<?= (int)$row->id ?>" title="Cancel transaction"><i class="fa-solid fa-arrow-rotate-left" aria-hidden="true"></i></button>
+											<?php if(!in_array(strtolower(trim((string)($row->transaction_status ?? ''))), ['cancelled','canceled','declined','rejected','reversed'], true)):?>
+												<button type="button" class="btn btn-outline-danger btn-sm js-direct-cancel" data-id="<?= (int)$row->id ?>" data-cancel-endpoint="<?=ROOT?>/<?=$admin_route?>/<?=$pluginRoute?>/cancel" data-cancel-label="Transaction #<?= (int)$row->id ?>" aria-label="Cancel transaction #<?= (int)$row->id ?>" title="Cancel transaction"><i class="fa-solid fa-arrow-rotate-left" aria-hidden="true"></i></button>
 											<?php endif;?>
 											</td>
 									</tr>
@@ -713,7 +712,7 @@ $agentOptions = $users ?? [];
 	    				}
 	    				const cancelHtml = ['cancelled','canceled','declined','rejected','reversed'].includes(status)
 	    					? ''
-	    					: `<button type="button" class="btn btn-outline-danger btn-sm js-direct-cancel" data-id="${row.id}" data-cancel-date="${String(row.date_created || '').slice(0, 10)}" data-cancel-endpoint="${VIEW_BASE}/cancel" data-cancel-label="Transaction #${row.id}" aria-label="Cancel transaction #${row.id}" title="Cancel transaction"><i class="fa-solid fa-arrow-rotate-left" aria-hidden="true"></i></button>`;
+	    					: `<button type="button" class="btn btn-outline-danger btn-sm js-direct-cancel" data-id="${row.id}" data-cancel-endpoint="${VIEW_BASE}/cancel" data-cancel-label="Transaction #${row.id}" aria-label="Cancel transaction #${row.id}" title="Cancel transaction"><i class="fa-solid fa-arrow-rotate-left" aria-hidden="true"></i></button>`;
 	    				tr.innerHTML = `
 	    				<td class="d-none d-lg-table-cell"><span class="badge bg-warning text-black text-black rounded-circle pill">${((state.page-1)*state.limit)+index+1}</span>${row.id}</td>
 	    				<td class="d-none d-lg-table-cell">${formatDate(row.date_created)}</td>
@@ -1093,7 +1092,7 @@ $agentOptions = $users ?? [];
 	    })();
 	    </script>
 	    <div class="d-none" data-direct-cancel-csrf><?=csrf()?></div>
-	    <script src="<?=ROOT?>/plugins/reversals/assets/direct-cancel.js?v=20261116-1"></script>
+	    <script src="<?=ROOT?>/plugins/reversals/assets/direct-cancel.js"></script>
 
 </div>
 <?php else:?>

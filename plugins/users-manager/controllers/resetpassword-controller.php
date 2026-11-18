@@ -18,12 +18,29 @@ if($csrf)
 
         $keyLength = 8;
         $randStr = reset_paaword($keyLength);
-        $postdata['password'] = password_hash($randStr, PASSWORD_DEFAULT);
-        if(!empty($randStr)){
-             message_success("PASSWORD CHANGED TO: ".$randStr);
-        }       
-    
-        $user->update($id, $postdata);
+        if (empty($randStr) || !function_exists('basic_auth_ensure_force_password_change_column') || !basic_auth_ensure_force_password_change_column()) {
+            message_fail("Could not reset the password. Please try again or contact support.");
+            return;
+        }
+
+        $db = new \Core\Database;
+        $db->query(
+            "UPDATE users
+             SET password = :password, force_password_change = 1, date_updated = :date_updated
+             WHERE id = :id",
+            [
+                'password' => password_hash($randStr, PASSWORD_DEFAULT),
+                'date_updated' => date('Y-m-d H:i:s'),
+                'id' => (int)$row->id,
+            ]
+        );
+        if ($db->has_error || $db->affected_rows !== 1) {
+            error_log('[users-manager] Admin password reset update failed: ' . ($db->error ?: 'User record was not updated.'));
+            message_fail("Could not reset the password. Please try again or contact support.");
+            return;
+        }
+
+        message_success("PASSWORD CHANGED TO: " . $randStr);
             
             //log changes in the log table
             $session = get_session();

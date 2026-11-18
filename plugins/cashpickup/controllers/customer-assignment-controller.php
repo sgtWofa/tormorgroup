@@ -2,8 +2,19 @@
 
 require_once plugin_path('helpers/customer-ledger.php');
 require_once plugin_path('helpers/customer-assignment.php');
+require_once plugin_path('helpers/permissions.php');
 
-if (!(user_can('is_manager') || user_can('is_admin'))) {
+$session = get_session();
+$actorId = (int)($session->id ?? 0);
+try {
+	$db = new \Core\Database;
+	$canAssignPayout = \CashpickupPermissions\can_assign_customer_payout($db, $actorId);
+} catch (\Throwable $e) {
+	error_log('[cashpickup] Customer assignment access check failed: ' . $e->getMessage());
+	message_fail('Unable to verify access. Please try again.');
+	redirect($admin_route . '/' . $plugin_route . '/customers');
+}
+if (!$canAssignPayout) {
 	message_fail('Access denied.');
 	redirect($admin_route . '/' . $plugin_route . '/customers');
 }
@@ -11,11 +22,10 @@ if (!(user_can('is_manager') || user_can('is_admin'))) {
 $customerId = (int)(URL(3) ?? ($req->post('customer_id') ?? 0));
 $targetUserId = (int)($req->post('assigned_user_id') ?? 0);
 $amount = round((float)($req->post('amount') ?? 0), 2);
-$session = get_session();
-$actorId = (int)($session->id ?? 0);
+$pickupCharge = round((float)($req->post('pickup_charge') ?? 0), 2);
 
-if ($customerId <= 0 || $targetUserId <= 0 || $amount <= 0) {
-	message_fail('Select a user and enter a valid assignment amount.');
+if ($customerId <= 0 || $targetUserId <= 0 || $amount <= 0 || $pickupCharge < 0 || $pickupCharge >= $amount) {
+	message_fail('Select a user, enter a valid assignment amount, and keep the payout charge below that amount.');
 	redirect($admin_route . '/' . $plugin_route . '/customer/' . $customerId . '#withdraw-section');
 }
 if (!csrf_verify($req->post())) {
@@ -24,7 +34,6 @@ if (!csrf_verify($req->post())) {
 }
 
 try {
-	$db = new \Core\Database;
 	\CashpickupLedger\ensure_cashpickup_customer_schema($db);
 	\CashpickupLedger\ensure_cashpickup_columns($db);
 	\CashpickupLedger\ensure_cashpickup_credit_schema($db);
@@ -50,7 +59,11 @@ try {
 			JOIN user_roles ur ON ur.id = urm.role_id
 			WHERE urm.disabled = 0
 			AND urm.user_id = u.id
-			AND LOWER(ur.role) IN ('manager','admin','is_manager','is_admin')
+			AND LOWER(TRIM(ur.role)) IN (
+				'manager','admin','is_manager','is_admin',
+				'general manager','general_manager','generalmanager','gm','is_general_manager',
+				'operations manager','operations_manager','operationsmanager','ops manager','ops_manager','opsmanager','is_operations_manager'
+			)
 		 )
 		 LIMIT 1",
 		['uid' => $targetUserId]
@@ -85,12 +98,13 @@ try {
 	}
 	$db->query(
 		"INSERT INTO cashpickup_customer_assignments
-		 (customer_id, assigned_user_id, amount, status, assigned_by, date_created)
-		 VALUES (:customer_id, :assigned_user_id, :amount, 'active', :assigned_by, :date_created)",
+		 (customer_id, assigned_user_id, amount, pickup_charge, status, assigned_by, date_created)
+		 VALUES (:customer_id, :assigned_user_id, :amount, :pickup_charge, 'active', :assigned_by, :date_created)",
 		[
 			'customer_id' => $customerId,
 			'assigned_user_id' => $targetUserId,
 			'amount' => $amount,
+			'pickup_charge' => $pickupCharge,
 			'assigned_by' => $actorId > 0 ? $actorId : null,
 			'date_created' => date('Y-m-d H:i:s'),
 		]
