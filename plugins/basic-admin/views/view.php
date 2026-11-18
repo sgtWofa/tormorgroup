@@ -4075,12 +4075,34 @@
     });
   };
 
+  <?php
+    $exchangeRoleNamesRaw = $session->roles ?? [];
+    if (!is_array($exchangeRoleNamesRaw)) {
+      $exchangeRoleNamesRaw = [$exchangeRoleNamesRaw];
+    }
+    $exchangeRoleNames = array_map(static fn($role): string => strtolower(trim((string)$role)), $exchangeRoleNamesRaw);
+    $exchangeManagerRole = user_can('is_admin')
+      || user_can('is_manager')
+      || user_can('is_general_manager')
+      || user_can('is_operations_manager')
+      || in_array('admin', $exchangeRoleNames, true)
+      || in_array('administrator', $exchangeRoleNames, true)
+      || in_array('is_administrator', $exchangeRoleNames, true);
+    foreach ($exchangeRoleNames as $exchangeRoleName) {
+      if ($exchangeRoleName === 'gm' || strpos($exchangeRoleName, 'manager') !== false) {
+        $exchangeManagerRole = true;
+        break;
+      }
+    }
+    $exchangeAgentRole = !$exchangeManagerRole
+      && (user_can('add_cashpickup') || in_array('agent', $exchangeRoleNames, true));
+  ?>
   window.basicAdminChannelExchangePolicy = (function(){
     const bankAliases = {
       ADB: 'ADB', ADB_BANK: 'ADB',
       ABSA: 'ABSA', ABSA_BANK: 'ABSA', ABSA_FORMERLY_BARCLAYS: 'ABSA', ABSA_FORMERLY_BARCLAYS_BANK: 'ABSA', BARCLAYS: 'ABSA', BARCLAYS_BANK: 'ABSA',
       FIDELITY: 'FIDELITY', FIDELITY_BANK: 'FIDELITY',
-      CAL: 'CAL', CAL_BANK: 'CAL',
+      CAL: 'CAL', CAL_BANK: 'CAL', CALBANK: 'CAL',
       ACCESS: 'ACCESS', ACCESS_BANK: 'ACCESS',
       ECOBANK: 'ECOBANK', ECOBANK_BANK: 'ECOBANK',
       GCB: 'GCB', GCB_BANK: 'GCB',
@@ -4101,41 +4123,56 @@
         MTN: 'MTN', MTN_EVD: 'MTN_EVD',
         TELECEL: 'TELECEL', TELECEL_EVD: 'TELECEL_EVD',
         AT: 'AT', AT_EVD: 'AT_EVD', AIRTELTIGO: 'AT', AIRTEL_TIGO: 'AT',
-        GHANAPAY: 'GHANAPAY', GHANA_PAY: 'GHANAPAY'
+        GHANAPAY: 'GHANAPAY', GHANA_PAY: 'GHANAPAY',
+        GMONEY: 'GMONEY', G_MONEY: 'GMONEY'
       };
       return aliases[value] || bankAliases[value] || value;
     }
     function isBank(key){
       return bankChannels.includes(canonical(key));
     }
-    function isAdminOnlyExchange(fromKey, toKey){
-      const from = canonical(fromKey);
-      const to = canonical(toKey);
-      if(from === 'GHANAPAY') return isBank(toKey);
-      if(from === 'GCB') return isBank(toKey);
-      if(from === 'MTN') return ['ABSA', 'FIDELITY', 'CAL', 'ACCESS', 'STANBIC', 'GCB', 'FNB', 'FBN', 'GTBANK', 'MTN_EVD'].includes(to);
-      if(from === 'TELECEL') return ['ABSA', 'FIDELITY'].includes(to);
-      if(from === 'FIDELITY') return ['TELECEL', 'MTN', 'AT'].includes(to);
-      if(from === 'AT') return to === 'FIDELITY';
-      if(from === 'STANBIC') return ['GHANAPAY', 'MTN', 'TELECEL'].includes(to);
-      if(from === 'APEX_NAFANA' || from === 'APEX_SUMA') return to === 'GHANAPAY';
-      return false;
+    const agentPairs = {
+      MTN: ['MTN_EVD'],
+      TELECEL: ['TELECEL_EVD'],
+      AT: ['AT_EVD']
+    };
+    const managementPairs = {
+      MTN: ['ABSA', 'STANBIC', 'FIDELITY', 'MTN_MOMOPAY', 'FBN', 'CAL', 'ECOBANK', 'FNB', 'ACCESS', 'GTBANK', 'MTN_EVD'],
+      TELECEL: ['FIDELITY', 'TELECEL_EVD'],
+      AT: ['FIDELITY', 'AT_EVD'],
+      STANBIC: ['GHANAPAY'],
+      APEX_NAFANA: ['GHANAPAY'],
+      APEX_SUMA: ['GHANAPAY'],
+      GMONEY: ['GCB']
+    };
+    function pairIsAllowed(pairs, from, to){
+      return (pairs[from] || []).includes(to) || (pairs[to] || []).includes(from);
     }
-    function allows(fromKey, toKey, isAdmin){
+    function allows(fromKey, toKey, role){
       const from = canonical(fromKey);
       const to = canonical(toKey);
       if(!from || !to || from === to) return false;
-      if(from === 'TELECEL' && to === 'TELECEL_EVD') return false;
-      return !!isAdmin || !isAdminOnlyExchange(fromKey, toKey);
+      if(role && role.agent){
+        return pairIsAllowed(agentPairs, from, to);
+      }
+      if(!role || !role.manager) return false;
+      return pairIsAllowed(managementPairs, from, to)
+        || (from === 'GHANAPAY' && isBank(toKey))
+        || (to === 'GHANAPAY' && ['STANBIC', 'APEX_NAFANA', 'APEX_SUMA'].includes(from))
+        || (from === 'GCB' && isBank(toKey) && to !== 'GCB')
+        || (to === 'GCB' && isBank(fromKey) && from !== 'GCB');
     }
-    return {canonical, isBank, isAdminOnlyExchange, allows};
+    return {canonical, isBank, allows};
   })();
 
   window.basicAdminOpenEcashExchange = function(){
     const ctx = window.__cashdrawerCtx || {};
     const drawerId = parseInt(ctx.drawerId || '0');
     const userId = parseInt(ctx.userId || '0');
-    const isAdmin = <?= user_can('is_admin') ? 'true' : 'false' ?>;
+    const exchangeRole = {
+      manager: <?= $exchangeManagerRole ? 'true' : 'false' ?>,
+      agent: <?= $exchangeAgentRole ? 'true' : 'false' ?>
+    };
 
     const storedKeys = Array.isArray(ctx.ecashKeys) ? ctx.ecashKeys.slice() : [];
     const standardNetworkKeys = [
@@ -4158,15 +4195,19 @@
       });
       return Array.from(keysByNormalizedName.values());
     }
-    const sourceKeys = uniqueChannelKeys(storedKeys);
     const destinationKeys = uniqueChannelKeys(storedKeys.concat(standardNetworkKeys));
+    const sourceKeys = uniqueChannelKeys(storedKeys).filter(function(fromKey){
+      return destinationKeys.some(function(toKey){
+        return window.basicAdminChannelExchangePolicy.allows(fromKey, toKey, exchangeRole);
+      });
+    });
     if(!drawerId || !userId){
       window.basicAdminSwalAlert('Error', 'Open a cashdrawer first.', 'error');
       return;
     }
     function buildToOptions(fromKey){
       return destinationKeys.filter(function(key){
-        return window.basicAdminChannelExchangePolicy.allows(fromKey, key, isAdmin);
+        return window.basicAdminChannelExchangePolicy.allows(fromKey, key, exchangeRole);
       });
     }
 
@@ -4281,7 +4322,7 @@
           <label class="form-label">Amount (GHS)</label>
           <input type="number" class="form-control" id="ecashExchangeAmount" step="0.01" min="0.01" />
         </div>
-        <div class="small text-muted">Allowed destinations depend on the source channel. Some routes are Admin-only. Applicable exchanges include a 1% fee capped at GHS 10.00; the exact fee and total debit will be shown before confirmation.</div>
+        <div class="small text-muted">Available exchanges depend on your role, channel assignments, and source channel. Some eligible exchanges charge 1%, capped at GHS 10.00; the exact fee and total debit will be shown before confirmation.</div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>

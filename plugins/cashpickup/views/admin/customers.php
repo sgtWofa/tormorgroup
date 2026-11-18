@@ -979,10 +979,8 @@ else:
 										<?php if(user_can('add_cashpickup') && $approvalStatus === 'approved'): ?>
 											<a class="btn btn-icon btn-outline-success" title="New receive" aria-label="New receive" href="<?=ROOT?>/<?=$admin_route?>/<?=$plugin_route?>/add?customer_id=<?=$customerId?>"><i class="fa fa-plus"></i></a>
 										<?php endif; ?>
-										<?php if(!$isNonPrivileged && $approvalStatus === 'approved' && $balance > 0.00001): ?>
-											<?php if((float)($customerAttention['viewer_payout_available'] ?? 0) <= 0.00001): ?>
-												<a class="btn btn-icon btn-outline-warning" title="Withdraw" aria-label="Withdraw" href="<?=ROOT?>/<?=$admin_route?>/<?=$plugin_route?>/customer/<?=$customerId?>#withdraw-section"><i class="fa fa-hand-holding-dollar"></i></a>
-											<?php endif; ?>
+										<?php if($canWithdrawCustomerPayout && $approvalStatus === 'approved' && $balance > 0.00001): ?>
+											<a class="btn btn-icon btn-outline-warning" title="Withdraw" aria-label="Withdraw" href="<?=ROOT?>/<?=$admin_route?>/<?=$plugin_route?>/customer/<?=$customerId?>#withdraw-section"><i class="fa fa-hand-holding-dollar"></i></a>
 										<?php endif; ?>
 										<?php if($approvalStatus === 'approved'): ?>
 											<a class="btn btn-icon btn-outline-info" title="Transfer" aria-label="Transfer" href="<?=ROOT?>/<?=$admin_route?>/<?=$plugin_route?>/customer/<?=$customerId?>#transfer-section"><i class="fa fa-right-left"></i></a>
@@ -1093,10 +1091,8 @@ else:
 										<?php if(user_can('add_cashpickup') && $approvalStatus === 'approved'): ?>
 												<a class="btn btn-icon btn-outline-success" title="New Receive" href="<?=ROOT?>/<?=$admin_route?>/<?=$plugin_route?>/add?customer_id=<?=esc((string)($c->id ?? 0))?>"><i class="fa fa-plus"></i></a>
 											<?php endif; ?>
-											<?php if(!$isNonPrivileged && $approvalStatus === 'approved' && $balance > 0.00001): ?>
-												<?php if((float)($customerAttention['viewer_payout_available'] ?? 0) <= 0.00001): ?>
-													<a class="btn btn-icon btn-outline-warning" title="Withdraw" href="<?=ROOT?>/<?=$admin_route?>/<?=$plugin_route?>/customer/<?=esc((string)($c->id ?? 0))?>#withdraw-section"><i class="fa fa-hand-holding-dollar"></i></a>
-												<?php endif; ?>
+											<?php if($canWithdrawCustomerPayout && $approvalStatus === 'approved' && $balance > 0.00001): ?>
+												<a class="btn btn-icon btn-outline-warning" title="Withdraw" href="<?=ROOT?>/<?=$admin_route?>/<?=$plugin_route?>/customer/<?=esc((string)($c->id ?? 0))?>#withdraw-section"><i class="fa fa-hand-holding-dollar"></i></a>
 											<?php endif; ?>
 											<?php if($approvalStatus === 'approved'): ?>
 												<a class="btn btn-icon btn-outline-info" title="Transfer" href="<?=ROOT?>/<?=$admin_route?>/<?=$plugin_route?>/customer/<?=esc((string)($c->id ?? 0))?>#transfer-section"><i class="fa fa-right-left"></i></a>
@@ -1707,7 +1703,7 @@ else:
 <div class="d-flex align-items-center justify-content-between mb-3 cashpickup-customers-header">
 	<div>
 		<h4 class="mb-0" id="cashpickupCustomersHeading" data-default-text="<?=esc($isNonPrivileged ? 'Customers' : 'Customer Ledger')?>"><?=$activeTab === 'new' ? 'New customer approvals' : ($isNonPrivileged ? 'Customers' : 'Customer Ledger')?></h4>
-		<small class="text-muted" id="cashpickupCustomersDescription" data-default-text="<?=esc($isNonPrivileged ? 'All customer accounts; payouts are available only for balances assigned to you.' : 'Cash pickup customer profiles and transaction history')?>"><?=$activeTab === 'new' ? 'Review new registrations and approve or deny access.' : ($isNonPrivileged ? 'All customer accounts; payouts are available only for balances assigned to you.' : 'Cash pickup customer profiles and transaction history')?></small>
+		<small class="text-muted" id="cashpickupCustomersDescription" data-default-text="<?=esc($canWithdrawCustomerPayout ? 'All customer accounts; agents can withdraw from available balances.' : ($isNonPrivileged ? 'All customer accounts.' : 'Cash pickup customer profiles and transaction history'))?>"><?=$activeTab === 'new' ? 'Review new registrations and approve or deny access.' : ($canWithdrawCustomerPayout ? 'All customer accounts; agents can withdraw from available balances.' : ($isNonPrivileged ? 'All customer accounts.' : 'Cash pickup customer profiles and transaction history'))?></small>
 		<div id="crmFilterSummary" class="small text-body-secondary mt-1"></div>
 	</div>
 	<div class="cashpickup-customers-header-actions">

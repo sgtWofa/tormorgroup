@@ -96,25 +96,7 @@
 	}
 	$customerAssignments = \CashpickupCustomerAssignment\get_customer_assignments($db, $customerId);
 	$unassignedBalance = \CashpickupCustomerAssignment\get_unassigned_balance($db, $customerId);
-	$viewerAssignedBalance = \CashpickupCustomerAssignment\get_remaining_amount($db, $customerId, $user_id);
-	$withdrawAvailable = !$canWithdraw
-		? 0.0
-		: ($isOperationsManager
-		? max(0.0, (float)$metrics['balance'])
-		: min(max(0.0, (float)$metrics['balance']), $viewerAssignedBalance));
-	$viewerChargeAssignments = [];
-	foreach ($customerAssignments as $assignment) {
-		if (strtolower(trim((string)($assignment->status ?? ''))) !== 'active'
-			|| (int)($assignment->assigned_user_id ?? 0) !== $user_id
-			|| (float)($assignment->remaining_amount ?? 0) <= 0.00001) {
-			continue;
-		}
-		$viewerChargeAssignments[] = [
-			'amount' => (float)($assignment->amount ?? 0),
-			'pickup_charge' => (float)($assignment->pickup_charge ?? 0),
-			'remaining_amount' => (float)($assignment->remaining_amount ?? 0),
-		];
-	}
+	$withdrawAvailable = $canWithdraw ? max(0.0, (float)$metrics['balance']) : 0.0;
 	$assignmentUsers = [];
 	if ($canAssignPayout) {
 		$assignmentUsers = $db->query(
@@ -1530,7 +1512,7 @@
 				<div class="card-header d-flex align-items-center justify-content-between">
 					<div>
 						<strong><?=$canWithdraw ? 'Withdraw from Cumulative Balance' : 'Payout assignments'?></strong>
-						<div class="small text-muted"><?=$canWithdraw ? "Withdraw against the customer's total balance. The amount is allocated FIFO across their unpaid receive records." : "Assign customer balance to eligible agents for payout."?></div>
+						<div class="small text-muted"><?=$canWithdraw ? "Withdraw against the customer's total balance. Agent withdrawals are submitted for approval." : "Assign customer balance to eligible agents for payout."?></div>
 					</div>
 					<?php if($canWithdraw): ?>
 						<div class="small">Available to withdraw: <span class="fw-bold <?=((float)$withdrawAvailable < 0) ? 'text-danger' : 'text-success'?>">GH&#8373; <?=number_format((float)$withdrawAvailable, 2)?></span></div>
@@ -1632,15 +1614,10 @@
 								</div>
 							</div>
 						</div>
-					<?php elseif($canWithdraw && $viewerAssignedBalance > 0.00001): ?>
-						<div class="alert alert-info d-flex justify-content-between align-items-center">
-							<span><i class="fa fa-user-check me-1"></i> Your assigned payout balance</span>
-							<strong>GH&#8373; <?=number_format((float)$withdrawAvailable, 2)?></strong>
-						</div>
 					<?php endif; ?>
 					<?php if($canWithdraw): ?>
 					<?php if((float)$withdrawAvailable <= 0.00001): ?>
-						<div class="alert alert-warning mb-0"><?=$isOperationsManager ? 'This customer has no available balance to withdraw.' : 'No payout balance is assigned to you for this customer.'?></div>
+						<div class="alert alert-warning mb-0">This customer has no available balance to withdraw.</div>
 					<?php else: ?>
 					<form method="post" action="<?=ROOT?>/<?=$admin_route?>/<?=$plugin_route?>/customer_withdraw/<?=esc((string)$customerId)?>" id="cashpickupWithdrawForm">
 						<?=csrf()?>
@@ -1655,9 +1632,9 @@
 								<small class="text-muted">Max: GH&#8373; <?=number_format((float)$withdrawAvailable, 2)?></small>
 							</div>
 							<div class="col-12 col-md-4">
-								<label class="form-label">Pickup Charge (GH&#8373;)</label>
-								<input type="number" step="0.01" min="0" name="pickup_charge" value="0" class="form-control" id="withdrawCharge" <?=$isOperationsManager ? '' : 'readonly'?>>
-								<?php if(!$isOperationsManager): ?><small class="text-muted">Calculated from the payout charge assigned to you.</small><?php endif; ?>
+								<label class="form-label">Withdrawal Charge (GH&#8373;)</label>
+								<input type="number" step="0.1" min="0" name="pickup_charge" value="0" class="form-control" id="withdrawCharge">
+								<small class="text-muted">Enter the withdrawal charge to deduct from the payout.</small>
 							</div>
 							<div class="col-12 col-md-4">
 								<label class="form-label">Payment Method <span class="text-danger">*</span></label>
@@ -1791,8 +1768,6 @@
 							var amount = document.getElementById('withdrawAmount');
 							var charge = document.getElementById('withdrawCharge');
 							var sellingRate = <?=json_encode((float)$cfaRates['selling_rate'])?>;
-							var isOperationsManager = <?=$isOperationsManager ? 'true' : 'false'?>;
-							var chargeAssignments = <?=json_encode($viewerChargeAssignments, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)?>;
 							if(!pm) return;
 
 							var blocks = function(){ return document.querySelectorAll('.withdraw-method-block'); };
@@ -1809,24 +1784,6 @@
 								var c = parseFloat(charge && charge.value) || 0;
 								return Math.max(0, a - c);
 							};
-							var updateAssignedCharge = function(){
-								if(isOperationsManager || !charge || !amount) return;
-								var remaining = Math.max(0, parseFloat(amount.value) || 0);
-								var totalCharge = 0;
-								chargeAssignments.forEach(function(assignment){
-									if(remaining <= 0.00001) return;
-									var assignedAmount = parseFloat(assignment.amount) || 0;
-									var available = parseFloat(assignment.remaining_amount) || 0;
-									var take = Math.min(available, remaining);
-									if(assignedAmount > 0 && take > 0){
-										var prorated = (parseFloat(assignment.pickup_charge) || 0) * take / assignedAmount;
-										totalCharge += Math.floor((prorated + 0.000000001) * 10) / 10;
-										remaining = Math.max(0, remaining - take);
-									}
-								});
-								charge.value = totalCharge.toFixed(1);
-							};
-
 							// GHS calculator
 							var ghsModal = document.getElementById('withdrawDenosGhsModal');
 							function updateGhsTarget(){
@@ -1876,7 +1833,6 @@
 								bootstrap.Modal.getOrCreateInstance(ghsModal).hide();
 							});
 							if(amount) amount.addEventListener('input', function(){
-								updateAssignedCharge();
 								updateGhsTarget();
 								updateCfaTarget();
 							});
@@ -1939,7 +1895,6 @@
 							});
 							if(charge) charge.addEventListener('input', updateCfaTarget);
 
-							updateAssignedCharge();
 							sync();
 						})();
 					</script>

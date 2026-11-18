@@ -243,7 +243,9 @@ try {
                 break;
             }
         }
-        $canUseSharedAccounts = (user_can('is_admin') || user_can('is_manager') || user_can('is_general_manager') || user_can('is_operations_manager') || in_array('admin', $sessionRolesLower, true) || $isManagerRole);
+        $canUseSharedAccounts = (user_can('is_admin') || user_can('is_manager') || user_can('is_general_manager') || user_can('is_operations_manager') || in_array('admin', $sessionRolesLower, true) || in_array('administrator', $sessionRolesLower, true) || in_array('is_administrator', $sessionRolesLower, true) || $isManagerRole);
+        $isAgentExchangeUser = !$canUseSharedAccounts
+            && (user_can('add_cashpickup') || in_array('agent', $sessionRolesLower, true));
 
         $bankAccountKeys = [
             'ADB', 'ADB_BANK',
@@ -251,7 +253,7 @@ try {
             'FIDELITY', 'FIDELITY_BANK',
             'APEX_NAFANA', 'APEX_NAFANA_BANK', 'NAFANA_RURAL_BANK', 'NAFANA_BANK',
             'APEX_SUMA', 'APEX_SUMA_BANK', 'SUMA_RURAL_BANK', 'SUMA_BANK',
-            'ACCESS', 'ACCESS_BANK', 'CAL', 'CAL_BANK', 'ECOBANK', 'ECOBANK_BANK',
+            'ACCESS', 'ACCESS_BANK', 'CAL', 'CAL_BANK', 'CALBANK', 'ECOBANK', 'ECOBANK_BANK',
             'GCB', 'GCB_BANK', 'GT', 'GT_BANK', 'GTBANK', 'GTBANK_BANK', 'STANBIC', 'STANBIC_BANK',
             'FIRST_NATIONAL_BANK', 'FIRST_NATIONAL_BANK_FNB', 'FNB', 'FNB_BANK',
             'FBN', 'FBN_BANK', 'FIRST_BANK_NIGERIA',
@@ -309,6 +311,8 @@ try {
                 'AIRTEL_TIGO' => 'AT',
                 'GHANAPAY' => 'GHANAPAY',
                 'GHANA_PAY' => 'GHANAPAY',
+                'GMONEY' => 'GMONEY',
+                'G_MONEY' => 'GMONEY',
             ];
             if (isset($mobileAliases[$key])) {
                 return $mobileAliases[$key];
@@ -319,7 +323,7 @@ try {
                 'ABSA' => 'ABSA', 'ABSA_BANK' => 'ABSA', 'ABSA_FORMERLY_BARCLAYS' => 'ABSA',
                 'ABSA_FORMERLY_BARCLAYS_BANK' => 'ABSA', 'BARCLAYS' => 'ABSA', 'BARCLAYS_BANK' => 'ABSA',
                 'FIDELITY' => 'FIDELITY', 'FIDELITY_BANK' => 'FIDELITY',
-                'CAL' => 'CAL', 'CAL_BANK' => 'CAL',
+                'CAL' => 'CAL', 'CAL_BANK' => 'CAL', 'CALBANK' => 'CAL',
                 'ACCESS' => 'ACCESS', 'ACCESS_BANK' => 'ACCESS',
                 'ECOBANK' => 'ECOBANK', 'ECOBANK_BANK' => 'ECOBANK',
                 'GCB' => 'GCB', 'GCB_BANK' => 'GCB',
@@ -346,41 +350,37 @@ try {
             return;
         }
 
-        $adminOnlyExchange = false;
-        switch ($fromCanonical) {
-            case 'GHANAPAY':
-                $adminOnlyExchange = $isBankChannelKey($toKey);
-                break;
-            case 'MTN':
-                $adminOnlyExchange = in_array($toCanonical, ['ABSA', 'FIDELITY', 'CAL', 'ACCESS', 'STANBIC', 'GCB', 'FNB', 'FBN', 'GTBANK', 'MTN_EVD'], true);
-                break;
-            case 'TELECEL':
-                $adminOnlyExchange = in_array($toCanonical, ['ABSA', 'FIDELITY'], true);
-                break;
-            case 'FIDELITY':
-                $adminOnlyExchange = in_array($toCanonical, ['TELECEL', 'MTN', 'AT'], true);
-                break;
-            case 'AT':
-                $adminOnlyExchange = $toCanonical === 'FIDELITY';
-                break;
-            case 'STANBIC':
-                $adminOnlyExchange = in_array($toCanonical, ['GHANAPAY', 'MTN', 'TELECEL'], true);
-                break;
-            case 'APEX_NAFANA':
-            case 'APEX_SUMA':
-                $adminOnlyExchange = $toCanonical === 'GHANAPAY';
-                break;
-            case 'GCB':
-                $adminOnlyExchange = $isBankChannelKey($toKey);
-                break;
+        $agentExchangePairs = [
+            'MTN' => ['MTN_EVD'],
+            'TELECEL' => ['TELECEL_EVD'],
+            'AT' => ['AT_EVD'],
+        ];
+        $managementExchangePairs = [
+            'MTN' => ['ABSA', 'STANBIC', 'FIDELITY', 'MTN_MOMOPAY', 'FBN', 'CAL', 'ECOBANK', 'FNB', 'ACCESS', 'GTBANK', 'MTN_EVD'],
+            'TELECEL' => ['FIDELITY', 'TELECEL_EVD'],
+            'AT' => ['FIDELITY', 'AT_EVD'],
+            'STANBIC' => ['GHANAPAY'],
+            'APEX_NAFANA' => ['GHANAPAY'],
+            'APEX_SUMA' => ['GHANAPAY'],
+            'GMONEY' => ['GCB'],
+        ];
+        $pairIsAllowed = static function (array $pairs, string $from, string $to): bool {
+            return in_array($to, $pairs[$from] ?? [], true)
+                || in_array($from, $pairs[$to] ?? [], true);
+        };
+        $isManagementExchangeUser = $canUseSharedAccounts;
+        $exchangeAllowed = false;
+        if ($isAgentExchangeUser) {
+            $exchangeAllowed = $pairIsAllowed($agentExchangePairs, $fromCanonical, $toCanonical);
+        } elseif ($isManagementExchangeUser) {
+            $exchangeAllowed = $pairIsAllowed($managementExchangePairs, $fromCanonical, $toCanonical)
+                || ($fromCanonical === 'GHANAPAY' && $isBankChannelKey($toKey))
+                || ($toCanonical === 'GHANAPAY' && in_array($fromCanonical, ['STANBIC', 'APEX_NAFANA', 'APEX_SUMA'], true))
+                || ($fromCanonical === 'GCB' && $isBankChannelKey($toKey) && $toCanonical !== 'GCB')
+                || ($toCanonical === 'GCB' && $isBankChannelKey($fromKey) && $fromCanonical !== 'GCB');
         }
-
-        if ($fromCanonical === 'TELECEL' && $toCanonical === 'TELECEL_EVD') {
-            echo json_encode(['success' => false, 'message' => 'Telecel EVD is not an allowed exchange destination.']);
-            return;
-        }
-        if ($adminOnlyExchange && !user_can('is_admin')) {
-            echo json_encode(['success' => false, 'message' => 'Only an Admin can use this channel exchange route.']);
+        if (!$exchangeAllowed) {
+            echo json_encode(['success' => false, 'message' => 'This channel exchange is not allowed for your role.']);
             return;
         }
 
@@ -718,12 +718,11 @@ try {
 
             }
 
-            $feeBankChannels = ['APEX_NAFANA', 'APEX_SUMA', 'GCB', 'ECOBANK', 'ACCESS'];
-            $isBankToBankFeeExchange = $isBankChannelKey($fromKey)
-                && $isBankChannelKey($toKey)
-                && (in_array($fromCanonical, $feeBankChannels, true) || in_array($toCanonical, $feeBankChannels, true));
-            $feeApplies = $isBankToBankFeeExchange
-                || ($fromCanonical === 'MTN_MOMOPAY' && $toCanonical === 'MTN');
+            $isMomoPayExchange = in_array($fromCanonical, ['MTN', 'MTN_MOMOPAY'], true)
+                && in_array($toCanonical, ['MTN', 'MTN_MOMOPAY'], true);
+            $isGcbBankExchange = ($fromCanonical === 'GCB' && $isBankChannelKey($toKey))
+                || ($toCanonical === 'GCB' && $isBankChannelKey($fromKey));
+            $feeApplies = $isMomoPayExchange || $isGcbBankExchange;
             $feeAmount = $feeApplies ? min(10.0, round($amount * 0.01, 2)) : 0.0;
             $totalDebit = round($amount + $feeAmount, 2);
 

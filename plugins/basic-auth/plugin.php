@@ -122,7 +122,10 @@ add_action('before_controller', function(){
 		&& strtolower((string)(URL(1) ?? '')) === 'profile'
 		&& strtolower((string)(URL(2) ?? '')) === 'resetpassword'
 		&& (int)(URL(3) ?? 0) === $userId;
-	if ($isPasswordChangeRoute) {
+	$isCashdrawerCreationRoute = strtolower((string)page()) === 'admin'
+		&& strtolower((string)(URL(1) ?? '')) === 'operations_accounts'
+		&& strtolower((string)(URL(2) ?? '')) === 'add_cashdrawer';
+	if ($isPasswordChangeRoute || $isCashdrawerCreationRoute) {
 		return;
 	}
 

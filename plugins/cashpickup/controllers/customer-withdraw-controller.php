@@ -119,32 +119,23 @@ try{
 	$customerBalance = max(0.0, (float)($balance['balance'] ?? 0));
 	$isAssignmentPrivileged = $isOperationsManager;
 	$assignedBalance = \CashpickupCustomerAssignment\get_remaining_amount($db, $customerId, $actorId);
-	$withdrawalLimit = $isAssignmentPrivileged ? $customerBalance : min($customerBalance, $assignedBalance);
+	$withdrawalLimit = $customerBalance;
 	if(($amount - $withdrawalLimit) > 0.00001){
-		$limitMessage = $isAssignmentPrivileged
-			? 'Withdrawal amount exceeds this customer balance (' . number_format($withdrawalLimit, 2) . ').'
-			: 'Withdrawal amount exceeds your assigned payout balance (' . number_format($withdrawalLimit, 2) . ').';
-		message_fail($limitMessage);
+		message_fail('Withdrawal amount exceeds this customer balance (' . number_format($withdrawalLimit, 2) . ').');
 		redirect($admin_route.'/'.$plugin_route.'/customer/'.$customerId);
 	}
 	$assignmentPlan = null;
-	if ($isAssignmentPrivileged) {
-		$pickupCharge = max(0.0, $pickupCharge);
-		$pickupCharge = floor(($pickupCharge + 0.000000001) * 10) / 10;
-	} else {
-		$assignmentPlan = \CashpickupCustomerAssignment\plan_allocation($db, $customerId, $actorId, $amount);
+	$pickupCharge = max(0.0, $pickupCharge);
+	$pickupCharge = floor(($pickupCharge + 0.000000001) * 10) / 10;
+	if (!$isAssignmentPrivileged) {
+		$assignedAmount = min($amount, $assignedBalance);
+		$assignmentPlan = \CashpickupCustomerAssignment\plan_allocation($db, $customerId, $actorId, $assignedAmount);
 		if (($assignmentPlan['shortfall'] ?? 0) > 0.00001) {
 			message_fail('Your assigned payout balance changed. Refresh and try again.');
 			redirect($admin_route.'/'.$plugin_route.'/customer/'.$customerId);
 		}
 	}
 
-	if (!$isAssignmentPrivileged) {
-		$pickupCharge = round(array_sum(array_map(
-			static fn(array $slice): float => (float)($slice['pickup_charge'] ?? 0),
-			$assignmentPlan['slices'] ?? []
-		)), 1);
-	}
 	if ($pickupCharge >= $amount && $pickupCharge > 0) {
 		message_fail('Payout charge must be less than the withdrawal amount.');
 		redirect($admin_route.'/'.$plugin_route.'/customer/'.$customerId);
@@ -351,22 +342,16 @@ try{
 	$latestBalance = \CashpickupLedger\fetch_customer_balance_metrics($db, $customerId);
 	$latestCustomerBalance = max(0.0, (float)($latestBalance['balance'] ?? 0));
 	$latestAssignedBalance = \CashpickupCustomerAssignment\get_remaining_amount($db, $customerId, $actorId);
-	$latestWithdrawalLimit = $isAssignmentPrivileged ? $latestCustomerBalance : min($latestCustomerBalance, $latestAssignedBalance);
+	$latestWithdrawalLimit = $latestCustomerBalance;
 	if ($amount > $latestWithdrawalLimit + 0.00001) {
 		throw new \RuntimeException('The available customer payout balance changed. Available: GH₵ ' . number_format($latestWithdrawalLimit, 2) . '.');
 	}
 	$assignmentPlan = null;
 	if (!$isAssignmentPrivileged) {
-		$assignmentPlan = \CashpickupCustomerAssignment\plan_allocation($db, $customerId, $actorId, $amount);
+		$assignedAmount = min($amount, $latestAssignedBalance);
+		$assignmentPlan = \CashpickupCustomerAssignment\plan_allocation($db, $customerId, $actorId, $assignedAmount);
 		if (($assignmentPlan['shortfall'] ?? 0) > 0.00001) {
 			throw new \RuntimeException('Your assigned payout balance changed. Refresh and try again.');
-		}
-		$lockedCharge = round(array_sum(array_map(
-			static fn(array $slice): float => (float)($slice['pickup_charge'] ?? 0),
-			$assignmentPlan['slices'] ?? []
-		)), 1);
-		if (abs($lockedCharge - $pickupCharge) > 0.00001) {
-			throw new \RuntimeException('The assigned payout charge changed. Refresh and try again.');
 		}
 	}
 	if ($pickupCharge >= $amount && $pickupCharge > 0) {
@@ -407,8 +392,8 @@ try{
 		'customer_location' => (string)($customer->location ?? ''),
 		'payout_channel' => $paymentMethod === 'transfer_telcos' ? $payoutChannel : ($paymentMethod === 'transfer_bank' ? $accountPaidTo : ''),
 		'assigned_user_id' => $actorId,
-		'approved_by' => $actorId,
-		'approved_at' => $now,
+		'approved_by' => $approvalStatus === 'approved' ? $actorId : null,
+		'approved_at' => $approvalStatus === 'approved' ? $now : null,
 		'confirmed_by' => $confirmedBy,
 		'notes' => $notes,
 		'approval_status' => $approvalStatus,
@@ -569,7 +554,9 @@ try{
 		}
 	}
 
-	message_success('Customer payout of GH₵ ' . number_format($amount, 2) . ' recorded.');
+	message_success($approvalStatus === 'approved'
+		? 'Customer payout of GH₵ ' . number_format($amount, 2) . ' recorded.'
+		: 'Customer payout of GH₵ ' . number_format($amount, 2) . ' submitted for approval.');
 	redirect($admin_route.'/'.$plugin_route.'/customer/'.$customerId);
 
 }catch(\Throwable $e){

@@ -538,6 +538,15 @@ if ($role_ids) {
 
 // Require a cashdrawer for today before accessing admin pages (except opening one),
 // while honoring work open/close times and reconciliation flow.
+$isForcedPasswordChangePage = (int)($session->force_password_change ?? 0) === 1
+    && strtolower((string)page()) === 'admin'
+    && strtolower((string)(URL(1) ?? '')) === 'profile'
+    && strtolower((string)(URL(2) ?? '')) === 'resetpassword'
+    && (int)(URL(3) ?? 0) === (int)($session->id ?? 0);
+$isForcedCashdrawerCreationPage = (int)($session->force_password_change ?? 0) === 1
+    && strtolower((string)page()) === 'admin'
+    && strtolower((string)(URL(1) ?? '')) === 'operations_accounts'
+    && strtolower((string)(URL(2) ?? '')) === 'add_cashdrawer';
 $hasCashdrawerToday = empty($user_id);
 $isBeforeOpen = false;
 $isAfterClose = false;
@@ -599,6 +608,10 @@ if (!$hasCashdrawerToday && $isBackOfficePage && !empty($user_id) && $db->table_
     $lateReconAccessId = $hasLateReconAccess ? (int)($lateRows[0]->id ?? 0) : 0;
 }
 
+if ($isForcedPasswordChangePage && !$hasCashdrawerToday) {
+    redirect('admin/operations_accounts/add_cashdrawer');
+}
+
 if (!$hasCashdrawerToday && ($isAddCashdrawerPage || $isOperationsAccountsHome)) {
     $currentFailMessage = ltrim((string)message_fail());
     $pendingReconMessages = [
@@ -616,13 +629,13 @@ if (!$hasCashdrawerToday && ($isAddCashdrawerPage || $isOperationsAccountsHome))
     }
 }
 
-if ($isBeforeOpen) {
+if (!$isForcedPasswordChangePage && !$isForcedCashdrawerCreationPage && $isBeforeOpen) {
     $msg = 'Work has not started yet. Please login after ' . ($workOpenText !== '' ? $workOpenText : 'work opens') . '.';
     message_fail($msg);
     redirect('login');
 }
 
-if ($isAfterClose) {
+if (!$isForcedPasswordChangePage && !$isForcedCashdrawerCreationPage && $isAfterClose) {
     if (function_exists('attendance_mark_absentees_after_work_close')) {
         attendance_mark_absentees_after_work_close($db, $nowGate);
     }
@@ -648,7 +661,7 @@ if ($isAfterClose) {
     }
 }
 
-if (!$hasCashdrawerToday && !$hasLateReconAccess && !$isAddCashdrawerPage && !$isOperationsAccountsHome && !$isBeforeOpen && !$isAfterClose) {
+if (!$isForcedPasswordChangePage && !$hasCashdrawerToday && !$hasLateReconAccess && !$isAddCashdrawerPage && !$isOperationsAccountsHome && !$isBeforeOpen && !$isAfterClose) {
     message_fail('Please open a cashdrawer for today to continue.');
     redirect('admin/operations_accounts/add_cashdrawer');
 }
