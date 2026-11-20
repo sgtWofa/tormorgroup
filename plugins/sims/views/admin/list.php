@@ -692,7 +692,7 @@ body[data-bs-theme='light'] .sim-analytics .leaderboard-card {
         </span>
     </header>
     <div class="p-4 border-bottom border-secondary border-opacity-10">
-        <form id="simFiltersForm" class="w-100">
+        <form id="simFiltersForm" class="w-100" data-bo-allow-multi-submit="1">
             <!-- Basic Filters Row -->
             <div class="row g-3 align-items-end mb-3">
                 <div class="col-md-4">
@@ -1074,16 +1074,39 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    function buildFilterUrl(page) {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('ajax');
+        url.searchParams.delete('__ajax');
+        if (filterForm) {
+            for (const [key, value] of new FormData(filterForm).entries()) {
+                if (value === '') {
+                    url.searchParams.delete(key);
+                } else {
+                    url.searchParams.set(key, value);
+                }
+            }
+        }
+        if (page > 0) {
+            url.searchParams.set('page', String(page));
+        } else {
+            url.searchParams.delete('page');
+        }
+        url.searchParams.set('ajax', '1');
+        return url;
+    }
+
     function attachPagerLinks() {
-        if (!pagerWrapper) return;
-        pagerWrapper.querySelectorAll('a.sim-page-control:not(.is-disabled):not([data-pager-attached])').forEach(link => {
-            link.dataset.pagerAttached = '1';
-            link.addEventListener('click', async (event) => {
-                event.preventDefault();
-                const url = new URL(link.href, window.location.origin);
-                url.searchParams.set('ajax', '1');
-                await fetchFilteredRows(url.toString());
-            });
+        if (!pagerWrapper || pagerWrapper.dataset.ajaxPagerAttached) return;
+        pagerWrapper.dataset.ajaxPagerAttached = '1';
+        pagerWrapper.addEventListener('click', async (event) => {
+            const target = event.target instanceof Element ? event.target : null;
+            const link = target ? target.closest('a.sim-page-control') : null;
+            if (!link || !pagerWrapper.contains(link) || link.classList.contains('is-disabled')) return;
+            event.preventDefault();
+            const linkUrl = new URL(link.href, window.location.origin);
+            const page = parseInt(linkUrl.searchParams.get('page') || '1', 10);
+            await fetchFilteredRows(buildFilterUrl(Number.isNaN(page) ? 1 : page).toString());
         });
     }
 
@@ -1182,18 +1205,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (filterForm) {
         filterForm.addEventListener('submit', async (event) => {
             event.preventDefault();
-            const formData = new FormData(filterForm);
-            const url = new URL(window.location.href);
-            url.searchParams.delete('page');
-            for (const [key, value] of formData.entries()) {
-                if (value === null || value === '') {
-                    url.searchParams.delete(key);
-                } else {
-                    url.searchParams.set(key, value);
-                }
-            }
-            url.searchParams.set('ajax', '1');
-            await fetchFilteredRows(url.toString());
+            await fetchFilteredRows(buildFilterUrl(0).toString());
         });
 
         const pageSizeSelect = document.getElementById('simFilterLimit');

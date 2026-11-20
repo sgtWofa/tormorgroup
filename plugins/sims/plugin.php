@@ -61,7 +61,7 @@ if(!function_exists('sims_render_pager')){
 				return '<span class="' . $classes . '" aria-disabled="true">' . $label . '</span>';
 			}
 			$href = htmlspecialchars($pageUrl($page), ENT_QUOTES, 'UTF-8');
-			return '<a class="' . $classes . '" href="' . $href . '">' . $label . '</a>';
+			return '<a class="' . $classes . '" href="' . $href . '" data-ajax-navigation="true">' . $label . '</a>';
 		};
 
 		$html = '<nav class="sim-pagination" aria-label="SIM transactions pages"><div class="sim-pagination-list">';

@@ -2864,6 +2864,7 @@ try {
 
 
         $ecashKeys = [];
+        $ecashBalances = [];
 
         if (!empty($ecash_channels_for_exchange)) {
             foreach ($ecash_channels_for_exchange as $ch) {
@@ -2873,6 +2874,7 @@ try {
                 if ($k !== '') {
 
                     $ecashKeys[$k] = true;
+                    $ecashBalances[$k] = (float)($ch->closing_balance ?? 0);
 
                 }
 
@@ -2883,13 +2885,18 @@ try {
         if (empty($ecashKeys) && !empty($drawerId) && !empty($row->user_id)) {
             try {
                 $keyRows = $db->query(
-                    "SELECT DISTINCT channel_key
-                     FROM drawer_balances
-                     WHERE drawer_id = :drawer_id
-                       AND user_id = :user_id
-                       AND channel_type = 'ecash'
-                       AND COALESCE(channel_key, '') <> ''
-                     ORDER BY channel_key ASC",
+                    "SELECT b.channel_key, b.opening_balance, b.credit, b.debit
+                     FROM drawer_balances AS b
+                     INNER JOIN (
+                         SELECT channel_key, MAX(id) AS max_id
+                         FROM drawer_balances
+                         WHERE drawer_id = :drawer_id
+                           AND user_id = :user_id
+                           AND channel_type = 'ecash'
+                           AND COALESCE(channel_key, '') <> ''
+                         GROUP BY channel_key
+                     ) AS latest ON latest.max_id = b.id
+                     ORDER BY b.channel_key ASC",
                     [
                         'drawer_id' => $drawerId,
                         'user_id' => (int)$row->user_id,
@@ -2905,6 +2912,9 @@ try {
                         || ($canonicalKey !== null && in_array($canonicalKey, $assignedSharedAccountKeys, true))
                     )) {
                         $ecashKeys[$k] = true;
+                        $ecashBalances[$k] = (float)($keyRow->opening_balance ?? 0)
+                            + (float)($keyRow->credit ?? 0)
+                            - (float)($keyRow->debit ?? 0);
                     }
                 }
             } catch (\Throwable $e) {
@@ -2925,6 +2935,7 @@ try {
             'drawer_id' => $drawerId,
 
             'ecash_keys' => array_keys($ecashKeys),
+            'ecash_balances' => $ecashBalances,
 
         ]);
 

@@ -5,10 +5,6 @@
 ?>
 <!DOCTYPE html>
 <html lang="en" data-bs-theme="auto" class="<?=$__mobileDocumentScrollPage ? 'mobile-document-scroll-page' : ''?>">
-<head>
-  <script src="<?=plugin_http_path('assets/js/color-modes.js')?>"></script>
-  <script src="<?=plugin_http_path('assets/js/export-progress.js')?>?v=<?=rawurlencode((string)(@filemtime(__DIR__ . '/../assets/js/export-progress.js') ?: '1'))?>" defer></script>
-
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="">
@@ -22,6 +18,7 @@
   <link href="<?=plugin_http_path('assets/css/custom.css')?>" rel="stylesheet" />
   <script src="<?=esc($featherJsUrl)?>" defer></script>
   <link href="<?=plugin_http_path('assets/css/virtual-select.min.css')?>" rel="stylesheet" rel="stylesheet">
+  <link href="<?=plugin_http_path('assets/css/select2.min.css')?>" rel="stylesheet">
   <link href="<?=plugin_http_path('assets/css/jquery.dataTables.min.css')?>">
   <script src="<?=plugin_http_path('assets/js/jquery-3.6.0.min.js')?>"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
@@ -64,6 +61,72 @@
     .app-page-skeleton__main {
       min-width: 0;
       padding: 1.5rem clamp(1rem, 3vw, 2.5rem);
+    }
+
+    .app-page-skeleton__loading {
+      display: grid;
+      grid-template-columns: 2.5rem minmax(0, 1fr);
+      align-items: center;
+      gap: 0.85rem;
+      margin-bottom: 1.5rem;
+      padding: 1rem 1.1rem;
+      border: 1px solid #dbe3ec;
+      border-radius: 0.75rem;
+      background: #fff;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+    }
+
+    .app-page-skeleton__loading-spinner {
+      width: 2.25rem;
+      height: 2.25rem;
+      border: 3px solid #dbeafe;
+      border-top-color: #2563eb;
+      border-radius: 50%;
+      animation: app-loading-spin 0.8s linear infinite;
+    }
+
+    .app-page-skeleton__loading-copy {
+      min-width: 0;
+    }
+
+    .app-page-skeleton__loading-title {
+      display: block;
+      color: #0f172a;
+      font-size: 0.95rem;
+      font-weight: 750;
+    }
+
+    .app-page-skeleton__loading-message {
+      display: block;
+      margin-top: 0.15rem;
+      color: #64748b;
+      font-size: 0.78rem;
+    }
+
+    .app-page-skeleton__progress {
+      height: 3px;
+      margin-top: 0.7rem;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #e2e8f0;
+    }
+
+    .app-page-skeleton__progress span {
+      display: block;
+      width: 32%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #2563eb, #14b8a6);
+      animation: app-loading-progress 1.4s ease-in-out infinite;
+    }
+
+    @keyframes app-loading-spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes app-loading-progress {
+      0% { transform: translateX(-110%); }
+      100% { transform: translateX(330%); }
     }
 
     .app-page-skeleton__topbar,
@@ -149,6 +212,23 @@
       border-color: #374151;
     }
 
+    html[data-bs-theme="dark"] .app-page-skeleton__loading {
+      background: #1f2937;
+      border-color: #374151;
+    }
+
+    html[data-bs-theme="dark"] .app-page-skeleton__loading-title {
+      color: #f1f5f9;
+    }
+
+    html[data-bs-theme="dark"] .app-page-skeleton__loading-message {
+      color: #cbd5e1;
+    }
+
+    html[data-bs-theme="dark"] .app-page-skeleton__progress {
+      background: #374151;
+    }
+
     html[data-bs-theme="dark"] .app-page-skeleton__shimmer {
       background: linear-gradient(90deg, #374151 25%, #4b5563 50%, #374151 75%);
       background-size: 200% 100%;
@@ -173,7 +253,9 @@
     }
 
     @media (prefers-reduced-motion: reduce) {
-      .app-page-skeleton__shimmer {
+      .app-page-skeleton__shimmer,
+      .app-page-skeleton__loading-spinner,
+      .app-page-skeleton__progress span {
         animation: none;
       }
     }
@@ -1592,6 +1674,148 @@
       background: transparent !important;
     }
 
+    #ecashExchangeModal .select2-container {
+      width: 100% !important;
+    }
+
+    #ecashExchangeModal .select2-container--open {
+      z-index: 1066;
+    }
+
+    #ecashExchangeModal .select2-container--default .select2-selection--single {
+      min-height: 48px;
+      border: 1px solid var(--bs-border-color);
+      border-radius: 8px;
+      background: var(--bs-body-bg);
+      display: flex;
+      align-items: center;
+      padding: 0 2.4rem 0 0.65rem;
+      transition: border-color 140ms ease, box-shadow 140ms ease;
+    }
+
+    #ecashExchangeModal .select2-container--default.select2-container--focus .select2-selection--single,
+    #ecashExchangeModal .select2-container--default.select2-container--open .select2-selection--single {
+      border-color: var(--bs-primary);
+      box-shadow: 0 0 0 3px rgba(var(--bs-primary-rgb), 0.14);
+    }
+
+    #ecashExchangeModal .select2-container--default .select2-selection--single .select2-selection__rendered {
+      width: 100%;
+      padding: 0;
+      line-height: normal;
+      color: var(--bs-body-color);
+    }
+
+    #ecashExchangeModal .select2-container--default .select2-selection--single .select2-selection__arrow {
+      height: 46px;
+      right: 8px;
+    }
+
+    #ecashExchangeModal .select2-dropdown {
+      overflow: hidden;
+      border: 1px solid var(--bs-border-color);
+      border-radius: 8px;
+      background: var(--bs-body-bg);
+      box-shadow: 0 14px 32px rgba(15, 23, 42, 0.18);
+    }
+
+    #ecashExchangeModal .select2-search--dropdown {
+      padding: 10px;
+      background: var(--bs-tertiary-bg);
+    }
+
+    #ecashExchangeModal .select2-search--dropdown .select2-search__field {
+      min-height: 38px;
+      padding: 7px 10px;
+      border: 1px solid var(--bs-border-color);
+      border-radius: 6px;
+      background: var(--bs-body-bg);
+      color: var(--bs-body-color);
+      outline: none;
+    }
+
+    #ecashExchangeModal .select2-results__option {
+      padding: 8px 10px;
+      color: var(--bs-body-color);
+    }
+
+    #ecashExchangeModal .select2-container--default .select2-results__option--highlighted[aria-selected] {
+      background: var(--bs-tertiary-bg);
+      color: var(--bs-body-color);
+    }
+
+    .cashdrawer-exchange-option {
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .cashdrawer-exchange-option__mark {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border-radius: 8px;
+      font-size: 0.7rem;
+      font-weight: 800;
+    }
+
+    .cashdrawer-exchange-option__copy {
+      display: grid;
+      min-width: 0;
+      gap: 2px;
+    }
+
+    .cashdrawer-exchange-option__name {
+      overflow: hidden;
+      color: var(--bs-body-color);
+      font-size: 0.88rem;
+      font-weight: 650;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .cashdrawer-exchange-option__hint {
+      color: var(--bs-secondary-color);
+      font-size: 0.7rem;
+    }
+
+    .cashdrawer-exchange-option__balance {
+      color: var(--bs-success-text-emphasis, #18794e);
+      font-size: 0.76rem;
+      font-weight: 700;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .cashdrawer-exchange-option__balance--empty {
+      color: var(--bs-secondary-color);
+      font-size: 0.68rem;
+      font-weight: 600;
+    }
+
+    .cashdrawer-exchange-option--selection {
+      grid-template-columns: 27px minmax(0, 1fr) auto;
+      gap: 8px;
+    }
+
+    .cashdrawer-exchange-option--selection .cashdrawer-exchange-option__mark {
+      width: 27px;
+      height: 27px;
+      border-radius: 7px;
+      font-size: 0.62rem;
+    }
+
+    .cashdrawer-exchange-option--selection .cashdrawer-exchange-option__hint {
+      display: none;
+    }
+
+    .cashdrawer-exchange-option--selection .cashdrawer-exchange-option__balance {
+      font-size: 0.7rem;
+    }
+
     /* Ops Chat / Ask Assistant widget (global) */
     .ai-assist-toggle {
       position: static;
@@ -1944,30 +2168,83 @@
 <script>
   (function(){
     const root = document.documentElement;
+    let loadingMessageTimer = null;
+    const cashPickupMessages = [
+      'Loading pickup records and balances',
+      'Checking approvals and payout status',
+      'Preparing the transaction list'
+    ];
+    const pageLoadingMessages = [
+      'Loading page content',
+      'Fetching the latest information',
+      'Finishing page setup'
+    ];
+    const clearLoadingMessageTimer = function(){
+      if(loadingMessageTimer){
+        window.clearInterval(loadingMessageTimer);
+        loadingMessageTimer = null;
+      }
+    };
+    const updateLoadingStatus = function(destination){
+      let pathname = window.location.pathname;
+      try{
+        pathname = new URL(destination || window.location.href, window.location.href).pathname;
+      }catch(error){}
+      const isCashPickup = /\/cashpickup(?:\/|$)/i.test(pathname);
+      const title = document.getElementById('appPageLoadingTitle');
+      const message = document.getElementById('appPageLoadingMessage');
+      const skeleton = document.getElementById('appPageSkeleton');
+      if(skeleton){
+        skeleton.setAttribute('aria-label', isCashPickup ? 'Loading Cash Pickup' : 'Loading page');
+      }
+      if(title){
+        title.textContent = isCashPickup ? 'Preparing Cash Pickup' : 'Getting your workspace ready';
+      }
+      clearLoadingMessageTimer();
+      const messages = isCashPickup ? cashPickupMessages : pageLoadingMessages;
+      let messageIndex = 0;
+      const updateMessage = function(){
+        const currentMessage = document.getElementById('appPageLoadingMessage');
+        if(currentMessage){
+          currentMessage.textContent = messages[messageIndex % messages.length];
+        }
+        messageIndex++;
+      };
+      updateMessage();
+      loadingMessageTimer = window.setInterval(updateMessage, 2400);
+    };
     const hidePageSkeleton = function(){
       root.classList.remove('app-page-loading');
       const skeleton = document.getElementById('appPageSkeleton');
       if(skeleton) skeleton.setAttribute('aria-hidden', 'true');
+      clearLoadingMessageTimer();
     };
-    const showPageSkeleton = function(){
+    const showPageSkeleton = function(destination){
       root.classList.add('app-page-loading');
       const skeleton = document.getElementById('appPageSkeleton');
       if(skeleton) skeleton.setAttribute('aria-hidden', 'false');
+      updateLoadingStatus(destination);
     };
 
     if(document.readyState !== 'complete'){
-      showPageSkeleton();
+      showPageSkeleton(window.location.href);
       window.addEventListener('load', hidePageSkeleton, {once: true});
     }else{
       hidePageSkeleton();
     }
 
+    document.addEventListener('DOMContentLoaded', function(){
+      if(root.classList.contains('app-page-loading')){
+        updateLoadingStatus(window.location.href);
+      }
+    });
     window.addEventListener('pageshow', hidePageSkeleton);
     document.addEventListener('click', function(event){
       if(event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       const target = event.target instanceof Element ? event.target : null;
       const link = target ? target.closest('a[href]') : null;
       if(!link || (link.target && link.target.toLowerCase() !== '_self') || link.hasAttribute('download')) return;
+      if(link.dataset.ajaxNavigation === 'true') return;
       let destination;
       try{
         destination = new URL(link.href, window.location.href);
@@ -1976,7 +2253,7 @@
       }
       if(destination.origin !== window.location.origin) return;
       if(destination.pathname === window.location.pathname && destination.search === window.location.search) return;
-      showPageSkeleton();
+      showPageSkeleton(destination.href);
     }, true);
     document.addEventListener('submit', function(event){
       const form = event.target;
@@ -2005,6 +2282,14 @@
       <div class="app-page-skeleton__topbar">
         <span class="app-page-skeleton__shimmer app-page-skeleton__shimmer--short"></span>
         <span class="app-page-skeleton__shimmer app-page-skeleton__shimmer--short"></span>
+      </div>
+      <div class="app-page-skeleton__loading" aria-live="polite">
+        <span class="app-page-skeleton__loading-spinner" aria-hidden="true"></span>
+        <div class="app-page-skeleton__loading-copy">
+          <strong class="app-page-skeleton__loading-title" id="appPageLoadingTitle">Getting your workspace ready</strong>
+          <span class="app-page-skeleton__loading-message" id="appPageLoadingMessage">Loading this page and its latest information</span>
+          <div class="app-page-skeleton__progress" aria-hidden="true"><span></span></div>
+        </div>
       </div>
       <div class="app-page-skeleton__heading">
         <span class="app-page-skeleton__shimmer app-page-skeleton__shimmer--title"></span>
@@ -3658,7 +3943,8 @@
             window.__cashdrawerCtx = {
               userId: parseInt(userId || '0'),
               drawerId: parseInt(response.drawer_id || document.querySelector('#drawerContent .reportDiv')?.getAttribute('data-drawer-id') || '0'),
-              ecashKeys: Array.isArray(response.ecash_keys) ? response.ecash_keys : []
+              ecashKeys: Array.isArray(response.ecash_keys) ? response.ecash_keys : [],
+              ecashBalances: response.ecash_balances || {}
             };
                         } else {
                             drawerBody.innerHTML = `<p class="text-danger">${response.message}</p>`;
@@ -3696,7 +3982,8 @@
           window.__cashdrawerCtx = {
             userId: uid,
             drawerId: parseInt(response.drawer_id || document.querySelector('#drawerContent .reportDiv')?.getAttribute('data-drawer-id') || '0'),
-            ecashKeys: Array.isArray(response.ecash_keys) ? response.ecash_keys : []
+            ecashKeys: Array.isArray(response.ecash_keys) ? response.ecash_keys : [],
+            ecashBalances: response.ecash_balances || {}
           };
         } else {
           drawerBody.innerHTML = `<p class="text-danger">${response.message || 'Failed to load drawer.'}</p>`;
@@ -4175,6 +4462,7 @@
     };
 
     const storedKeys = Array.isArray(ctx.ecashKeys) ? ctx.ecashKeys.slice() : [];
+    const storedBalances = ctx.ecashBalances && typeof ctx.ecashBalances === 'object' ? ctx.ecashBalances : {};
     const standardNetworkKeys = [
       'ECASH_MTN',
       'ECASH_TELECEL',
@@ -4228,6 +4516,19 @@
       };
       return labels[canonical] || canonical.replace(/_/g, ' ');
     }
+    function channelBalance(key){
+      const normalized = window.basicAdminChannelExchangePolicy.canonical(key);
+      const balanceKey = Object.keys(storedBalances).find(function(candidate){
+        return window.basicAdminChannelExchangePolicy.canonical(candidate) === normalized;
+      });
+      return balanceKey === undefined ? null : Number(storedBalances[balanceKey]);
+    }
+    function formatChannelBalance(key){
+      const balance = channelBalance(key);
+      return balance === null || !Number.isFinite(balance)
+        ? null
+        : 'GHS ' + balance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
     function populateOptions(select, keys, placeholder){
       if(!select) return;
       select.replaceChildren();
@@ -4238,8 +4539,72 @@
       keys.forEach(function(key){
         const item = document.createElement('option');
         item.value = key;
-        item.textContent = prettyChannelLabel(key);
+        const label = prettyChannelLabel(key);
+        const balance = formatChannelBalance(key);
+        item.textContent = balance ? label + ' - ' + balance : label;
         select.appendChild(item);
+      });
+      if(window.jQuery && window.jQuery.fn.select2 && window.jQuery(select).data('select2')){
+        window.jQuery(select).trigger('change.select2');
+      }
+    }
+    function channelOptionContent(data, role, selection){
+      if(!data.id) return data.text || '';
+      const key = String(data.id);
+      const label = prettyChannelLabel(key);
+      const balance = formatChannelBalance(key);
+      const row = document.createElement('span');
+      row.className = 'cashdrawer-exchange-option' + (selection ? ' cashdrawer-exchange-option--selection' : '');
+
+      const mark = document.createElement('span');
+      mark.className = 'cashdrawer-exchange-option__mark';
+      const initials = label.split(/\s+/).filter(Boolean).slice(0, 2).map(function(part){ return part.charAt(0); }).join('');
+      mark.textContent = initials.toUpperCase() || 'CH';
+      const palettes = [
+        ['#e8f1ff', '#2457a6'], ['#e6f5ee', '#24704a'], ['#fff0e5', '#99511e'],
+        ['#fbe9ef', '#9d3658'], ['#e9edf4', '#48566b']
+      ];
+      let hash = 0;
+      for(let index = 0; index < key.length; index++){
+        hash = ((hash << 5) - hash + key.charCodeAt(index)) | 0;
+      }
+      const palette = palettes[Math.abs(hash) % palettes.length];
+      mark.style.backgroundColor = palette[0];
+      mark.style.color = palette[1];
+      row.appendChild(mark);
+
+      const copy = document.createElement('span');
+      copy.className = 'cashdrawer-exchange-option__copy';
+      const name = document.createElement('span');
+      name.className = 'cashdrawer-exchange-option__name';
+      name.textContent = label;
+      copy.appendChild(name);
+      const hint = document.createElement('span');
+      hint.className = 'cashdrawer-exchange-option__hint';
+      hint.textContent = role === 'source' ? 'From this cashdrawer' : 'Receive channel';
+      copy.appendChild(hint);
+      row.appendChild(copy);
+
+      const balanceLabel = document.createElement('span');
+      balanceLabel.className = 'cashdrawer-exchange-option__balance';
+      if(balance){
+        balanceLabel.textContent = balance;
+      }else{
+        balanceLabel.classList.add('cashdrawer-exchange-option__balance--empty');
+        balanceLabel.textContent = role === 'source' ? 'No balance' : 'Receive';
+      }
+      row.appendChild(balanceLabel);
+      return window.jQuery ? window.jQuery(row) : row;
+    }
+    function initializeChannelPicker(select, placeholder, role){
+      if(!select || !window.jQuery || !window.jQuery.fn.select2) return;
+      window.jQuery(select).select2({
+        width: '100%',
+        dropdownParent: window.jQuery('#ecashExchangeModal'),
+        placeholder: placeholder,
+        minimumResultsForSearch: 0,
+        templateResult: function(data){ return channelOptionContent(data, role, false); },
+        templateSelection: function(data){ return channelOptionContent(data, role, true); }
       });
     }
     if(fromSel){
@@ -4252,11 +4617,16 @@
     if(toSel){
       renderTo(fromSel ? fromSel.value : '');
     }
+    initializeChannelPicker(fromSel, 'Select source', 'source');
+    initializeChannelPicker(toSel, 'Select destination', 'destination');
     if(fromSel && !fromSel.dataset.ecashExchangeWired){
       fromSel.dataset.ecashExchangeWired = '1';
-      fromSel.addEventListener('change', function(){
-        renderTo(fromSel.value);
-      });
+      const updateDestinations = function(){ renderTo(fromSel.value); };
+      if(window.jQuery){
+        window.jQuery(fromSel).on('change.ecashExchange', updateDestinations);
+      }else{
+        fromSel.addEventListener('change', updateDestinations);
+      }
     }
     if(amtEl){
       amtEl.value = '';
